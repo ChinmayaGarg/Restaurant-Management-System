@@ -15,15 +15,21 @@
     "seed": "ts-node prisma/seeds/index.ts"
   },
   "dependencies": {
+    "@nestjs/config": "^4.0.3",
+    "@nestjs/jwt": "^11.0.2",
+    "@nestjs/passport": "^11.0.5",
     "@prisma/client": "5.22.0",
     "@restaurant-platform/permissions": "workspace:*",
-    "bcryptjs": "^3.0.3"
+    "bcryptjs": "^3.0.3",
+    "passport": "^0.7.0",
+    "passport-jwt": "^4.0.1"
   },
   "devDependencies": {
-    "ts-node": "^10.0.0",
-    "typescript": "^5.0.0",
+    "@types/node": "^24.0.0",
+    "@types/passport-jwt": "^4.0.1",
     "prisma": "5.22.0",
+    "ts-node": "^10.0.0",
     "tsx": "^4.21.0",
-    "@types/node": "^24.0.0"
+    "typescript": "^5.0.0"
   }
 }
