@@ -3,6 +3,9 @@
   "private": true,
   "version": "0.1.0",
   "main": "dist/main.js",
+  "prisma": {
+    "seed": "tsx prisma/seeds/index.ts"
+  },
   "scripts": {
     "build": "tsc -p tsconfig.build.json",
     "start": "node dist/main.js",
@@ -12,19 +15,15 @@
     "seed": "ts-node prisma/seeds/index.ts"
   },
   "dependencies": {
-    "@nestjs/common": "^10.0.0",
-    "@nestjs/core": "^10.0.0",
-    "@nestjs/platform-express": "^10.0.0",
-    "@prisma/client": "^5.0.0",
-    "reflect-metadata": "^0.1.13",
-    "rxjs": "^7.0.0"
+    "@prisma/client": "5.22.0",
+    "@restaurant-platform/permissions": "workspace:*",
+    "bcryptjs": "^3.0.3"
   },
   "devDependencies": {
-    "@nestjs/cli": "^10.0.0",
-    "@nestjs/schematics": "^10.0.0",
-    "@nestjs/testing": "^10.0.0",
-    "prisma": "^5.0.0",
     "ts-node": "^10.0.0",
-    "typescript": "^5.0.0"
+    "typescript": "^5.0.0",
+    "prisma": "5.22.0",
+    "tsx": "^4.21.0",
+    "@types/node": "^24.0.0"
   }
 }

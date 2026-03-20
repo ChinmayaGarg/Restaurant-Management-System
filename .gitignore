@@ -1,0 +1,89 @@
+# =========================
+# Dependencies
+# =========================
+node_modules/
+./*/node_modules/
+.pnpm-store/
+
+# =========================
+# Build / output
+# =========================
+dist/
+build/
+.next/
+out/
+coverage/
+.turbo/
+tmp/
+temp/
+*.tsbuildinfo
+
+# =========================
+# Logs
+# =========================
+logs/
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+
+# =========================
+# Environment files
+# =========================
+.env
+.env.*
+!.env.example
+
+# =========================
+# Prisma
+# =========================
+.prisma/
+prisma/dev.db
+prisma/dev.db-journal
+
+# =========================
+# OS / editor files
+# =========================
+.DS_Store
+Thumbs.db
+.vscode/
+.idea/
+
+# =========================
+# Runtime / cache
+# =========================
+.cache/
+.parcel-cache/
+.eslintcache
+
+# =========================
+# Testing
+# =========================
+playwright-report/
+test-results/
+
+# =========================
+# Uploads / generated files
+# =========================
+uploads/
+generated/
+public/uploads/
+
+# =========================
+# Docker local overrides
+# =========================
+docker-compose.override.yml
+
+# =========================
+# Misc
+# =========================
+*.pem
+*.key
+
+apps/*/.env
+apps/*/.env.*
+packages/*/.env
+packages/*/.env.*
+!apps/*/.env.example
+!packages/*/.env.example
