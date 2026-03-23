@@ -1,16 +1,24 @@
 import {
   BadRequestException,
   Injectable,
+  Logger,
   NotFoundException,
 } from "@nestjs/common";
 import { OrderItemStatus, OrderStatus, Prisma } from "@prisma/client";
 import { PrismaService } from "../../database/prisma.service";
-import { UpdateKitchenOrderStatusDto } from "./dto/update-kitchen-order-status.dto";
+import { NotificationTypes } from "../notifications/notification-types";
+import { NotificationsService } from "../notifications/notifications.service";
 import { UpdateKitchenItemAvailabilityDto } from "./dto/update-kitchen-item-availability.dto";
+import { UpdateKitchenOrderStatusDto } from "./dto/update-kitchen-order-status.dto";
 
 @Injectable()
 export class KitchenService {
-  constructor(private readonly prisma: PrismaService) {}
+  private readonly logger = new Logger(KitchenService.name);
+
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly notificationsService: NotificationsService,
+  ) {}
 
   async getQueue(branchId: string) {
     return this.prisma.order.findMany({
@@ -84,44 +92,59 @@ export class KitchenService {
       return this.findOrderById(branchId, orderId);
     }
 
-    return this.prisma.$transaction(async (tx: Prisma.TransactionClient) => {
-      await tx.order.update({
-        where: { id: orderId },
-        data: {
-          status: dto.status,
-        },
-      });
-
-      await tx.orderStatusHistory.create({
-        data: {
-          orderId,
-          fromStatus: order.status,
-          toStatus: dto.status,
-          changedByUserId,
-        },
-      });
-
-      const targetItemStatus = this.mapOrderStatusToOrderItemStatus(dto.status);
-
-      if (targetItemStatus) {
-        await tx.orderItem.updateMany({
-          where: {
-            orderId,
-            status: {
-              not: OrderItemStatus.CANCELLED,
-            },
-          },
+    const updatedOrder = await this.prisma.$transaction(
+      async (tx: Prisma.TransactionClient) => {
+        await tx.order.update({
+          where: { id: orderId },
           data: {
-            status: targetItemStatus,
+            status: dto.status,
           },
         });
-      }
 
-      return tx.order.findUniqueOrThrow({
-        where: { id: orderId },
-        include: this.getOrderInclude(),
+        await tx.orderStatusHistory.create({
+          data: {
+            orderId,
+            fromStatus: order.status,
+            toStatus: dto.status,
+            changedByUserId,
+          },
+        });
+
+        const targetItemStatus = this.mapOrderStatusToOrderItemStatus(
+          dto.status,
+        );
+
+        if (targetItemStatus) {
+          await tx.orderItem.updateMany({
+            where: {
+              orderId,
+              status: {
+                not: OrderItemStatus.CANCELLED,
+              },
+            },
+            data: {
+              status: targetItemStatus,
+            },
+          });
+        }
+
+        return tx.order.findUniqueOrThrow({
+          where: { id: orderId },
+          include: this.getOrderInclude(),
+        });
+      },
+    );
+
+    if (dto.status === OrderStatus.READY) {
+      await this.safeNotify(branchId, {
+        title: "Order ready",
+        message: `Order ${updatedOrder.id} for ${updatedOrder.tableSession.table.displayName} is ready`,
+        type: NotificationTypes.ORDER_READY,
+        targetUserId: updatedOrder.tableSession.assignedServerId ?? undefined,
       });
-    });
+    }
+
+    return updatedOrder;
   }
 
   async updateItemAvailability(
@@ -145,7 +168,7 @@ export class KitchenService {
       throw new NotFoundException("Menu item not found for this branch");
     }
 
-    return this.prisma.menuItem.update({
+    const updatedItem = await this.prisma.menuItem.update({
       where: { id: itemId },
       data: {
         isAvailable: dto.isAvailable,
@@ -154,6 +177,16 @@ export class KitchenService {
         category: true,
       },
     });
+
+    await this.safeNotify(branchId, {
+      title: dto.isAvailable ? "Menu item available" : "Menu item unavailable",
+      message: `${updatedItem.name} is now ${dto.isAvailable ? "available" : "unavailable"}`,
+      type: dto.isAvailable
+        ? NotificationTypes.MENU_ITEM_AVAILABLE
+        : NotificationTypes.MENU_ITEM_UNAVAILABLE,
+    });
+
+    return updatedItem;
   }
 
   private async findOrderById(branchId: string, orderId: string) {
@@ -234,5 +267,21 @@ export class KitchenService {
         },
       },
     };
+  }
+
+  private async safeNotify(
+    branchId: string,
+    payload: {
+      title: string;
+      message: string;
+      type: string;
+      targetUserId?: string;
+    },
+  ) {
+    try {
+      await this.notificationsService.send(branchId, payload);
+    } catch (error) {
+      this.logger.error("Failed to create notification", error as Error);
+    }
   }
 }
