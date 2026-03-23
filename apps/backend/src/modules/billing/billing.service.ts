@@ -1,20 +1,23 @@
 import {
   BadRequestException,
   Injectable,
+  Logger,
   NotFoundException,
 } from "@nestjs/common";
-import {
-  BillStatus,
-  OrderStatus,
-  Prisma,
-  TableSessionStatus,
-} from "@prisma/client";
+import { BillStatus, OrderStatus, Prisma } from "@prisma/client";
 import { PrismaService } from "../../database/prisma.service";
+import { NotificationTypes } from "../notifications/notification-types";
+import { NotificationsService } from "../notifications/notifications.service";
 import { GenerateBillDto } from "./dto/generate-bill.dto";
 
 @Injectable()
 export class BillingService {
-  constructor(private readonly prisma: PrismaService) {}
+  private readonly logger = new Logger(BillingService.name);
+
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly notificationsService: NotificationsService,
+  ) {}
 
   async generateBill(
     branchId: string,
@@ -125,40 +128,51 @@ export class BillingService {
 
     const billNumber = this.generateBillNumber();
 
-    return this.prisma.$transaction(async (tx: Prisma.TransactionClient) => {
-      const bill = await tx.bill.create({
-        data: {
-          tableSessionId: dto.tableSessionId,
-          billNumber,
-          status: BillStatus.GENERATED,
-          subtotalAmount,
-          discountAmount,
-          taxAmount,
-          serviceChargeAmount,
-          totalAmount,
-          generatedByUserId,
-          generatedAt: new Date(),
-        },
-      });
-
-      for (const orderItem of orderItems) {
-        await tx.billItem.create({
+    const createdBill = await this.prisma.$transaction(
+      async (tx: Prisma.TransactionClient) => {
+        const bill = await tx.bill.create({
           data: {
-            billId: bill.id,
-            orderItemId: orderItem.id,
-            nameSnapshot: orderItem.menuItem.name,
-            quantity: orderItem.quantity,
-            unitPrice: orderItem.unitPrice,
-            lineTotal: orderItem.lineTotal,
+            tableSessionId: dto.tableSessionId,
+            billNumber,
+            status: BillStatus.GENERATED,
+            subtotalAmount,
+            discountAmount,
+            taxAmount,
+            serviceChargeAmount,
+            totalAmount,
+            generatedByUserId,
+            generatedAt: new Date(),
           },
         });
-      }
 
-      return tx.bill.findUniqueOrThrow({
-        where: { id: bill.id },
-        include: this.getBillInclude(),
-      });
+        for (const orderItem of orderItems) {
+          await tx.billItem.create({
+            data: {
+              billId: bill.id,
+              orderItemId: orderItem.id,
+              nameSnapshot: orderItem.menuItem.name,
+              quantity: orderItem.quantity,
+              unitPrice: orderItem.unitPrice,
+              lineTotal: orderItem.lineTotal,
+            },
+          });
+        }
+
+        return tx.bill.findUniqueOrThrow({
+          where: { id: bill.id },
+          include: this.getBillInclude(),
+        });
+      },
+    );
+
+    await this.safeNotify(branchId, {
+      title: "Bill generated",
+      message: `Bill ${createdBill.billNumber} generated for ${createdBill.tableSession.table.displayName}`,
+      type: NotificationTypes.BILL_GENERATED,
+      targetUserId: createdBill.tableSession.assignedServerId ?? undefined,
     });
+
+    return createdBill;
   }
 
   async findById(branchId: string, billId: string) {
@@ -205,7 +219,7 @@ export class BillingService {
       return this.findById(branchId, billId);
     }
 
-    return this.prisma.bill.update({
+    const closedBill = await this.prisma.bill.update({
       where: { id: billId },
       data: {
         status: BillStatus.CLOSED,
@@ -213,6 +227,15 @@ export class BillingService {
       },
       include: this.getBillInclude(),
     });
+
+    await this.safeNotify(branchId, {
+      title: "Bill closed",
+      message: `Bill ${closedBill.billNumber} has been closed`,
+      type: NotificationTypes.BILL_CLOSED,
+      targetUserId: closedBill.tableSession.assignedServerId ?? undefined,
+    });
+
+    return closedBill;
   }
 
   async reprintBill(branchId: string, billId: string) {
@@ -320,5 +343,20 @@ export class BillingService {
     const s = String(now.getSeconds()).padStart(2, "0");
 
     return `BILL-${y}${m}${d}-${h}${min}${s}-${Math.floor(Math.random() * 1000)}`;
+  }
+  private async safeNotify(
+    branchId: string,
+    payload: {
+      title: string;
+      message: string;
+      type: string;
+      targetUserId?: string;
+    },
+  ) {
+    try {
+      await this.notificationsService.send(branchId, payload);
+    } catch (error) {
+      this.logger.error("Failed to create notification", error as Error);
+    }
   }
 }
