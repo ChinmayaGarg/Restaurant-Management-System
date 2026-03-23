@@ -1,6 +1,7 @@
 import {
   BadRequestException,
   Injectable,
+  Logger,
   NotFoundException,
 } from "@nestjs/common";
 import {
@@ -9,12 +10,19 @@ import {
   TableSessionStatus,
 } from "@prisma/client";
 import { PrismaService } from "../../database/prisma.service";
+import { NotificationTypes } from "../notifications/notification-types";
+import { NotificationsService } from "../notifications/notifications.service";
 import { CreateServiceRequestDto } from "./dto/create-service-request.dto";
 import { ReassignServiceRequestDto } from "./dto/reassign-service-request.dto";
 
 @Injectable()
 export class ServiceRequestsService {
-  constructor(private readonly prisma: PrismaService) {}
+  private readonly logger = new Logger(ServiceRequestsService.name);
+
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly notificationsService: NotificationsService,
+  ) {}
 
   async findAll(branchId: string) {
     return this.prisma.serviceRequest.findMany({
@@ -51,32 +59,43 @@ export class ServiceRequestsService {
       );
     }
 
-    return this.prisma.$transaction(async (tx: Prisma.TransactionClient) => {
-      const serviceRequest = await tx.serviceRequest.create({
-        data: {
-          tableSessionId: dto.tableSessionId,
-          requestType: dto.requestType,
-          sourceType: dto.sourceType,
-          sourceDeviceId: dto.sourceDeviceId,
-          status: ServiceRequestStatus.OPEN,
-          createdByUserId,
-        },
-      });
+    const createdRequest = await this.prisma.$transaction(
+      async (tx: Prisma.TransactionClient) => {
+        const serviceRequest = await tx.serviceRequest.create({
+          data: {
+            tableSessionId: dto.tableSessionId,
+            requestType: dto.requestType,
+            sourceType: dto.sourceType,
+            sourceDeviceId: dto.sourceDeviceId,
+            status: ServiceRequestStatus.OPEN,
+            createdByUserId,
+          },
+        });
 
-      await tx.serviceRequestHistory.create({
-        data: {
-          serviceRequestId: serviceRequest.id,
-          fromStatus: null,
-          toStatus: ServiceRequestStatus.OPEN,
-          changedByUserId: createdByUserId,
-        },
-      });
+        await tx.serviceRequestHistory.create({
+          data: {
+            serviceRequestId: serviceRequest.id,
+            fromStatus: null,
+            toStatus: ServiceRequestStatus.OPEN,
+            changedByUserId: createdByUserId,
+          },
+        });
 
-      return tx.serviceRequest.findUniqueOrThrow({
-        where: { id: serviceRequest.id },
-        include: this.getInclude(),
-      });
+        return tx.serviceRequest.findUniqueOrThrow({
+          where: { id: serviceRequest.id },
+          include: this.getInclude(),
+        });
+      },
+    );
+
+    await this.safeNotify(branchId, {
+      title: "New service request",
+      message: `${createdRequest.tableSession.table.displayName} requested ${createdRequest.requestType}`,
+      type: NotificationTypes.SERVICE_REQUEST_CREATED,
+      targetUserId: createdRequest.tableSession.assignedServerId ?? undefined,
     });
+
+    return createdRequest;
   }
 
   async acknowledge(
@@ -227,28 +246,38 @@ export class ServiceRequestsService {
       return this.findById(branchId, serviceRequestId);
     }
 
-    return this.prisma.$transaction(async (tx: Prisma.TransactionClient) => {
-      await tx.serviceRequest.update({
-        where: { id: serviceRequestId },
-        data: {
-          status: ServiceRequestStatus.ESCALATED,
-        },
-      });
+    const escalatedRequest = await this.prisma.$transaction(
+      async (tx: Prisma.TransactionClient) => {
+        await tx.serviceRequest.update({
+          where: { id: serviceRequestId },
+          data: {
+            status: ServiceRequestStatus.ESCALATED,
+          },
+        });
 
-      await tx.serviceRequestHistory.create({
-        data: {
-          serviceRequestId,
-          fromStatus: serviceRequest.status,
-          toStatus: ServiceRequestStatus.ESCALATED,
-          changedByUserId,
-        },
-      });
+        await tx.serviceRequestHistory.create({
+          data: {
+            serviceRequestId,
+            fromStatus: serviceRequest.status,
+            toStatus: ServiceRequestStatus.ESCALATED,
+            changedByUserId,
+          },
+        });
 
-      return tx.serviceRequest.findUniqueOrThrow({
-        where: { id: serviceRequestId },
-        include: this.getInclude(),
-      });
+        return tx.serviceRequest.findUniqueOrThrow({
+          where: { id: serviceRequestId },
+          include: this.getInclude(),
+        });
+      },
+    );
+
+    await this.safeNotify(branchId, {
+      title: "Service request escalated",
+      message: `${escalatedRequest.tableSession.table.displayName} request ${escalatedRequest.requestType} was escalated`,
+      type: NotificationTypes.SERVICE_REQUEST_ESCALATED,
     });
+
+    return escalatedRequest;
   }
 
   async reassign(
@@ -355,5 +384,21 @@ export class ServiceRequestsService {
         },
       },
     };
+  }
+
+  private async safeNotify(
+    branchId: string,
+    payload: {
+      title: string;
+      message: string;
+      type: string;
+      targetUserId?: string;
+    },
+  ) {
+    try {
+      await this.notificationsService.send(branchId, payload);
+    } catch (error) {
+      this.logger.error("Failed to create notification", error as Error);
+    }
   }
 }
