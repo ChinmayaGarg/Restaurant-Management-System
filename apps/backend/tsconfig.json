@@ -1,7 +1,3 @@
 {
-  "compilerOptions": {
-    "types": ["node"],
-    "module": "NodeNext",
-    "moduleResolution": "NodeNext"
-  }
+  "extends": "./tsconfig.build.json"
 }
