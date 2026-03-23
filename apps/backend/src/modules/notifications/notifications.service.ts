@@ -1,10 +1,16 @@
-import { Injectable, NotFoundException } from "@nestjs/common";
+import { Injectable, Logger, NotFoundException } from "@nestjs/common";
 import { PrismaService } from "../../database/prisma.service";
 import { SendNotificationDto } from "./dto/send-notification.dto";
+import { NotificationsGateway } from "./notifications.gateway";
 
 @Injectable()
 export class NotificationsService {
-  constructor(private readonly prisma: PrismaService) {}
+  private readonly logger = new Logger(NotificationsService.name);
+
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly notificationsGateway: NotificationsGateway,
+  ) {}
 
   async findAll(branchId: string, userId: string) {
     return this.prisma.notification.findMany({
@@ -43,7 +49,7 @@ export class NotificationsService {
       }
     }
 
-    return this.prisma.notification.create({
+    const created = await this.prisma.notification.create({
       data: {
         branchId,
         title: dto.title,
@@ -62,6 +68,27 @@ export class NotificationsService {
         },
       },
     });
+
+    try {
+      this.notificationsGateway.emitCreated({
+        id: created.id,
+        branchId: created.branchId,
+        title: created.title,
+        message: created.message,
+        type: created.type,
+        isRead: created.isRead,
+        targetUserId: created.targetUserId,
+        createdAt: created.createdAt,
+        readAt: created.readAt,
+      });
+    } catch (error) {
+      this.logger.error(
+        "Failed to emit notification.created event",
+        error instanceof Error ? error.stack : String(error),
+      );
+    }
+
+    return created;
   }
 
   async markRead(branchId: string, userId: string, notificationId: string) {
@@ -93,7 +120,7 @@ export class NotificationsService {
       });
     }
 
-    return this.prisma.notification.update({
+    const updated = await this.prisma.notification.update({
       where: { id: notificationId },
       data: {
         isRead: true,
@@ -110,5 +137,21 @@ export class NotificationsService {
         },
       },
     });
+
+    try {
+      this.notificationsGateway.emitRead({
+        id: updated.id,
+        branchId: updated.branchId,
+        targetUserId: updated.targetUserId,
+        readAt: updated.readAt,
+      });
+    } catch (error) {
+      this.logger.error(
+        "Failed to emit notification.read event",
+        error instanceof Error ? error.stack : String(error),
+      );
+    }
+
+    return updated;
   }
 }
