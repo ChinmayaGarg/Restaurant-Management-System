@@ -1,6 +1,7 @@
 import {
   BadRequestException,
   Injectable,
+  Logger,
   NotFoundException,
 } from "@nestjs/common";
 import {
@@ -10,12 +11,19 @@ import {
   Prisma,
 } from "@prisma/client";
 import { PrismaService } from "../../database/prisma.service";
-import { RecordCashPaymentDto } from "./dto/record-cash-payment.dto";
+import { NotificationTypes } from "../notifications/notification-types";
+import { NotificationsService } from "../notifications/notifications.service";
 import { RecordCardPaymentDto } from "./dto/record-card-payment.dto";
+import { RecordCashPaymentDto } from "./dto/record-cash-payment.dto";
 
 @Injectable()
 export class PaymentsService {
-  constructor(private readonly prisma: PrismaService) {}
+  private readonly logger = new Logger(PaymentsService.name);
+
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly notificationsService: NotificationsService,
+  ) {}
 
   async findByBillId(branchId: string, billId: string) {
     const bill = await this.getBillOrThrow(branchId, billId);
@@ -101,67 +109,85 @@ export class PaymentsService {
       throw new BadRequestException("Payment amount exceeds remaining balance");
     }
 
-    return this.prisma.$transaction(async (tx: Prisma.TransactionClient) => {
-      const payment = await tx.payment.create({
-        data: {
-          billId,
-          method,
-          provider: meta.provider,
-          providerReference: meta.providerReference,
-          amount: incomingAmount,
-          status: PaymentStatus.SUCCESS,
-          recordedByUserId,
-          paidAt: new Date(),
-        },
-        include: {
-          recordedByUser: {
-            select: {
-              id: true,
-              firstName: true,
-              lastName: true,
-              email: true,
+    return this.prisma
+      .$transaction(async (tx: Prisma.TransactionClient) => {
+        const payment = await tx.payment.create({
+          data: {
+            billId,
+            method,
+            provider: meta.provider,
+            providerReference: meta.providerReference,
+            amount: incomingAmount,
+            status: PaymentStatus.SUCCESS,
+            recordedByUserId,
+            paidAt: new Date(),
+          },
+          include: {
+            recordedByUser: {
+              select: {
+                id: true,
+                firstName: true,
+                lastName: true,
+                email: true,
+              },
             },
           },
-        },
-      });
+        });
 
-      const updatedBill = await tx.bill.findUniqueOrThrow({
-        where: { id: billId },
-        include: {
-          payments: true,
-        },
-      });
-
-      const updatedPaidAmount = this.getSuccessfulPaidAmount(
-        updatedBill.payments,
-      );
-      const updatedBalanceAmount =
-        updatedBill.totalAmount.minus(updatedPaidAmount);
-
-      if (updatedBalanceAmount.lte(new Prisma.Decimal(0))) {
-        await tx.bill.update({
+        const updatedBill = await tx.bill.findUniqueOrThrow({
           where: { id: billId },
-          data: {
-            status: BillStatus.PAID,
+          include: {
+            payments: true,
           },
         });
-      }
 
-      const finalBill = await tx.bill.findUniqueOrThrow({
-        where: { id: billId },
-        include: this.getBillInclude(),
+        const updatedPaidAmount = this.getSuccessfulPaidAmount(
+          updatedBill.payments,
+        );
+        const updatedBalanceAmount =
+          updatedBill.totalAmount.minus(updatedPaidAmount);
+
+        if (updatedBalanceAmount.lte(new Prisma.Decimal(0))) {
+          await tx.bill.update({
+            where: { id: billId },
+            data: {
+              status: BillStatus.PAID,
+            },
+          });
+        }
+
+        const finalBill = await tx.bill.findUniqueOrThrow({
+          where: { id: billId },
+          include: this.getBillInclude(),
+        });
+
+        return {
+          message: "Payment recorded successfully",
+          payment,
+          bill: finalBill,
+          paidAmount: updatedPaidAmount,
+          balanceAmount: updatedBalanceAmount.lt(new Prisma.Decimal(0))
+            ? new Prisma.Decimal(0)
+            : updatedBalanceAmount,
+        };
+      })
+      .then(async (result) => {
+        await this.safeNotify(branchId, {
+          title: "Payment recorded",
+          message: `Payment of ${result.payment.amount.toString()} recorded for bill ${result.bill.billNumber}`,
+          type: NotificationTypes.PAYMENT_RECORDED,
+        });
+
+        if (result.bill.status === BillStatus.PAID) {
+          await this.safeNotify(branchId, {
+            title: "Bill paid",
+            message: `Bill ${result.bill.billNumber} is fully paid`,
+            type: NotificationTypes.BILL_PAID,
+          });
+        }
+
+        return result;
       });
-
-      return {
-        message: "Payment recorded successfully",
-        payment,
-        bill: finalBill,
-        paidAmount: updatedPaidAmount,
-        balanceAmount: updatedBalanceAmount.lt(new Prisma.Decimal(0))
-          ? new Prisma.Decimal(0)
-          : updatedBalanceAmount,
-      };
-    });
   }
 
   private async getBillOrThrow(branchId: string, billId: string) {
@@ -222,5 +248,21 @@ export class PaymentsService {
         },
       },
     };
+  }
+
+  private async safeNotify(
+    branchId: string,
+    payload: {
+      title: string;
+      message: string;
+      type: string;
+      targetUserId?: string;
+    },
+  ) {
+    try {
+      await this.notificationsService.send(branchId, payload);
+    } catch (error) {
+      this.logger.error("Failed to create notification", error as Error);
+    }
   }
 }
