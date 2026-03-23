@@ -7,6 +7,7 @@ import { UsersModule } from "./modules/users/users.module";
 import { RolesModule } from "./modules/roles/roles.module";
 import { HealthModule } from "./modules/health/health.module";
 import { MenuModule } from "./modules/menu/menu.module";
+import { TablesModule } from "./modules/tables/tables.module";
 
 @Module({
   imports: [
@@ -17,6 +18,7 @@ import { MenuModule } from "./modules/menu/menu.module";
     RolesModule,
     AuthModule,
     MenuModule,
+    TablesModule,
   ],
 })
 export class AppModule {}
