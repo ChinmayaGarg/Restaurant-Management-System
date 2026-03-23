@@ -87,3 +87,8 @@ packages/*/.env
 packages/*/.env.*
 !apps/*/.env.example
 !packages/*/.env.example
+
+# =========================
+# For Next.js
+# =========================
+.next
