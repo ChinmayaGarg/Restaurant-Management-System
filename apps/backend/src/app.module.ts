@@ -10,6 +10,7 @@ import { MenuModule } from "./modules/menu/menu.module";
 import { TablesModule } from "./modules/tables/tables.module";
 import { OrdersModule } from "./modules/orders/orders.module";
 import { ServiceRequestsModule } from "./modules/service-requests/service-requests.module";
+import { BillingModule } from "./modules/billing/billing.module";
 
 @Module({
   imports: [
@@ -23,6 +24,7 @@ import { ServiceRequestsModule } from "./modules/service-requests/service-reques
     TablesModule,
     OrdersModule,
     ServiceRequestsModule,
+    BillingModule,
   ],
 })
 export class AppModule {}
