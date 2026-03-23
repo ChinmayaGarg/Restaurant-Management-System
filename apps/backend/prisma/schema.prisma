@@ -149,6 +149,7 @@ model Branch {
   menuCategories MenuCategory[]
   moduleConfig ModuleConfig?
   taxConfigs   TaxConfig[]
+  notifications Notification[]
 
   @@index([restaurantId])
 }
@@ -200,6 +201,7 @@ model User {
   billAdjustments BillAdjustment[]
   recordedPayments Payment[]    @relation("RecordedByUser")
   auditLogs      AuditLog[]
+  targetedNotifications Notification[]
 
   @@index([branchId])
 }
@@ -662,5 +664,25 @@ model AuditLog {
 
   @@index([actorUserId])
   @@index([entityType, entityId])
+  @@index([createdAt])
+}
+
+model Notification {
+  id               String    @id @default(cuid())
+  branchId         String
+  title            String
+  message          String
+  type             String
+  isRead           Boolean   @default(false)
+  targetUserId     String?
+  createdAt        DateTime  @default(now())
+  readAt           DateTime?
+
+  branch           Branch    @relation(fields: [branchId], references: [id], onDelete: Cascade)
+  targetUser       User?     @relation(fields: [targetUserId], references: [id], onDelete: SetNull)
+
+  @@index([branchId])
+  @@index([targetUserId])
+  @@index([isRead])
   @@index([createdAt])
 }

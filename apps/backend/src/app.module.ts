@@ -13,6 +13,7 @@ import { ServiceRequestsModule } from "./modules/service-requests/service-reques
 import { BillingModule } from "./modules/billing/billing.module";
 import { PaymentsModule } from "./modules/payments/payments.module";
 import { KitchenModule } from "./modules/kitchen/kitchen.module";
+import { NotificationsModule } from "./modules/notifications/notifications.module";
 
 @Module({
   imports: [
@@ -29,6 +30,7 @@ import { KitchenModule } from "./modules/kitchen/kitchen.module";
     BillingModule,
     PaymentsModule,
     KitchenModule,
+    NotificationsModule,
   ],
 })
 export class AppModule {}
