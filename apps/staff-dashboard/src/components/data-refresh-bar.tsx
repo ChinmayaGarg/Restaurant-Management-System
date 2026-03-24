@@ -5,7 +5,7 @@ import { useIsFetching, useQueryClient } from "@tanstack/react-query";
 import { Button } from "@/components/ui/button";
 import { StatusBadge } from "@/components/ui/status-badge";
 import { useBrowserOnline } from "@/hooks/use-browser-online";
-import { useRealtimeStatus } from "@/hooks/use-realtime-status";
+import { useRealtime } from "@/providers/realtime-provider";
 
 function formatTime(date: Date | null) {
   if (!date) return "Never";
@@ -16,7 +16,7 @@ export function DataRefreshBar() {
   const queryClient = useQueryClient();
   const isFetching = useIsFetching();
   const online = useBrowserOnline();
-  const realtimeStatus = useRealtimeStatus();
+  const { status: realtimeStatus } = useRealtime();
 
   const [lastUpdated, setLastUpdated] = useState<Date | null>(new Date());
   const [refreshing, setRefreshing] = useState(false);

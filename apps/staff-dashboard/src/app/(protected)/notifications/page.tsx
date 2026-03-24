@@ -1,54 +1,57 @@
 "use client";
 
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import Link from "next/link";
-import { useRouter } from "next/navigation";
-import { useCallback, useMemo, useState } from "react";
-import { useAuth } from "@/providers/auth-provider";
+import { useEffect, useMemo, useState } from "react";
+
+import { PageHeader } from "@/components/page-header";
+import { Button } from "@/components/ui/button";
+import { Card } from "@/components/ui/card";
+import { EmptyState } from "@/components/ui/empty-state";
+import { StatusBadge } from "@/components/ui/status-badge";
 import { canDoAction } from "@/lib/access";
-import { useNotificationsSocket } from "@/hooks/use-notifications-socket";
-import { getToken } from "@/lib/auth";
 import {
   getNotifications,
   markNotificationRead,
 } from "@/lib/notifications-api";
-import type {
-  NotificationItem,
-  NotificationReadEvent,
-} from "@/types/notifications";
-import { Card, CardContent, CardHeader } from "@/components/ui/card";
-import { Button } from "@/components/ui/button";
-import { StatusBadge } from "@/components/ui/status-badge";
-import { EmptyState } from "@/components/ui/empty-state";
-import { PageHeader } from "@/components/page-header";
-
-function getTypeBadgeClasses(type: string) {
-  switch (type) {
-    case "SERVICE_REQUEST_CREATED":
-      return "bg-blue-100 text-blue-700";
-    case "SERVICE_REQUEST_ESCALATED":
-      return "bg-red-100 text-red-700";
-    case "ORDER_READY":
-      return "bg-green-100 text-green-700";
-    case "BILL_GENERATED":
-      return "bg-purple-100 text-purple-700";
-    case "PAYMENT_RECORDED":
-      return "bg-emerald-100 text-emerald-700";
-    case "BILL_PAID":
-      return "bg-green-100 text-green-700";
-    default:
-      return "bg-gray-100 text-gray-700";
-  }
-}
+import { useAuth } from "@/providers/auth-provider";
+import { useRealtime } from "@/providers/realtime-provider";
+import type { NotificationItem } from "@/types/notifications";
 
 export default function NotificationsPage() {
-  const router = useRouter();
   const queryClient = useQueryClient();
   const { user } = useAuth();
+  const { latestNotification, latestReadEvent } = useRealtime();
+
   const [errorMessage, setErrorMessage] = useState("");
-  const [liveNotifications, setLiveNotifications] = useState<
-    NotificationItem[]
-  >([]);
+
+  useEffect(() => {
+    if (!latestNotification) return;
+
+    queryClient.setQueryData<NotificationItem[]>(
+      ["notifications"],
+      (current = []) => {
+        const exists = current.some(
+          (item) => item.id === latestNotification.id,
+        );
+        if (exists) return current;
+        return [latestNotification, ...current];
+      },
+    );
+  }, [latestNotification, queryClient]);
+
+  useEffect(() => {
+    if (!latestReadEvent) return;
+
+    queryClient.setQueryData<NotificationItem[]>(
+      ["notifications"],
+      (current = []) =>
+        current.map((item) =>
+          item.id === latestReadEvent.id
+            ? { ...item, isRead: true, readAt: latestReadEvent.readAt }
+            : item,
+        ),
+    );
+  }, [latestReadEvent, queryClient]);
 
   const notificationsQuery = useQuery({
     queryKey: ["notifications"],
@@ -68,12 +71,6 @@ export default function NotificationsPage() {
             item.id === updatedNotification.id ? updatedNotification : item,
           ),
       );
-
-      setLiveNotifications((current) =>
-        current.map((item) =>
-          item.id === updatedNotification.id ? updatedNotification : item,
-        ),
-      );
     },
     onError: (error) => {
       setErrorMessage(
@@ -84,81 +81,13 @@ export default function NotificationsPage() {
     },
   });
 
-  const token = typeof window !== "undefined" ? getToken() : null;
-
-  const handleCreated = useCallback(
-    (notification: NotificationItem) => {
-      setLiveNotifications((current) => {
-        const existsInLive = current.some(
-          (item) => item.id === notification.id,
-        );
-        if (existsInLive) return current;
-        return [notification, ...current];
-      });
-
-      queryClient.setQueryData<NotificationItem[]>(
-        ["notifications"],
-        (current = []) => {
-          const exists = current.some((item) => item.id === notification.id);
-          if (exists) return current;
-          return [notification, ...current];
-        },
-      );
-    },
-    [queryClient],
-  );
-
-  const handleRead = useCallback(
-    (payload: NotificationReadEvent) => {
-      queryClient.setQueryData<NotificationItem[]>(
-        ["notifications"],
-        (current = []) =>
-          current.map((item) =>
-            item.id === payload.id
-              ? { ...item, isRead: true, readAt: payload.readAt }
-              : item,
-          ),
-      );
-
-      setLiveNotifications((current) =>
-        current.map((item) =>
-          item.id === payload.id
-            ? { ...item, isRead: true, readAt: payload.readAt }
-            : item,
-        ),
-      );
-    },
-    [queryClient],
-  );
-
-  useNotificationsSocket({
-    token,
-    onCreated: handleCreated,
-    onRead: handleRead,
-  });
-
   const notifications = useMemo(() => {
     const base = notificationsQuery.data ?? [];
-    const map = new Map<string, NotificationItem>();
-
-    for (const item of base) {
-      map.set(item.id, item);
-    }
-
-    for (const item of liveNotifications) {
-      map.set(item.id, item);
-    }
-
-    return Array.from(map.values()).sort(
+    return [...base].sort(
       (a, b) =>
         new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime(),
     );
-  }, [notificationsQuery.data, liveNotifications]);
-
-  const unreadCount = useMemo(
-    () => notifications.filter((item) => !item.isRead).length,
-    [notifications],
-  );
+  }, [notificationsQuery.data]);
 
   return (
     <main className="min-h-screen bg-gray-100 p-6">
@@ -198,6 +127,7 @@ export default function NotificationsPage() {
                 <div className="space-y-2">
                   <div className="flex items-center gap-3">
                     <h2 className="font-semibold">{notification.title}</h2>
+
                     <StatusBadge
                       label={notification.type}
                       tone={
@@ -216,6 +146,7 @@ export default function NotificationsPage() {
                                     : "gray"
                       }
                     />
+
                     {!notification.isRead ? (
                       <StatusBadge label="Unread" tone="gray" />
                     ) : null}

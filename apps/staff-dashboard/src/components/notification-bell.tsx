@@ -1,16 +1,12 @@
 "use client";
 
 import Link from "next/link";
-import { useCallback, useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 
-import { getToken } from "@/lib/auth";
 import { getNotifications } from "@/lib/notifications-api";
-import { useNotificationsSocket } from "@/hooks/use-notifications-socket";
-import type {
-  NotificationItem,
-  NotificationReadEvent,
-} from "@/types/notifications";
+import { useRealtime } from "@/providers/realtime-provider";
+import type { NotificationItem } from "@/types/notifications";
 
 function getTypeBadgeClasses(type: string) {
   switch (type) {
@@ -31,80 +27,80 @@ function getTypeBadgeClasses(type: string) {
   }
 }
 
+function sortNotifications(notifications: NotificationItem[]) {
+  return [...notifications].sort(
+    (a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime(),
+  );
+}
+
 export function NotificationBell() {
   const queryClient = useQueryClient();
   const [open, setOpen] = useState(false);
 
-  const token = typeof window !== "undefined" ? getToken() : null;
+  const { latestNotification, latestReadEvent } = useRealtime();
 
-  const notificationsQuery = useQuery({
+  const { data: notifications = [], isLoading } = useQuery({
     queryKey: ["notifications"],
     queryFn: getNotifications,
   });
 
-  const handleCreated = useCallback(
-    (notification: NotificationItem) => {
-      queryClient.setQueryData<NotificationItem[]>(
-        ["notifications"],
-        (current = []) => {
-          const exists = current.some((item) => item.id === notification.id);
-          if (exists) return current;
-          return [notification, ...current];
-        },
-      );
-    },
-    [queryClient],
-  );
+  useEffect(() => {
+    if (!latestNotification) return;
 
-  const handleRead = useCallback(
-    (payload: NotificationReadEvent) => {
-      queryClient.setQueryData<NotificationItem[]>(
-        ["notifications"],
-        (current = []) =>
-          current.map((item) =>
-            item.id === payload.id
-              ? { ...item, isRead: true, readAt: payload.readAt }
-              : item,
-          ),
-      );
-    },
-    [queryClient],
-  );
+    queryClient.setQueryData<NotificationItem[]>(
+      ["notifications"],
+      (current = []) => {
+        const exists = current.some(
+          (item) => item.id === latestNotification.id,
+        );
 
-  useNotificationsSocket({
-    token,
-    onCreated: handleCreated,
-    onRead: handleRead,
-  });
+        return exists ? current : [latestNotification, ...current];
+      },
+    );
+  }, [latestNotification, queryClient]);
 
-  const notifications = notificationsQuery.data ?? [];
-  const unreadCount = notifications.filter((item) => !item.isRead).length;
-  const latestNotifications = useMemo(
-    () =>
-      [...notifications]
-        .sort(
-          (a, b) =>
-            new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime(),
-        )
-        .slice(0, 5),
+  useEffect(() => {
+    if (!latestReadEvent) return;
+
+    queryClient.setQueryData<NotificationItem[]>(
+      ["notifications"],
+      (current = []) =>
+        current.map((item) =>
+          item.id === latestReadEvent.id
+            ? { ...item, isRead: true, readAt: latestReadEvent.readAt }
+            : item,
+        ),
+    );
+  }, [latestReadEvent, queryClient]);
+
+  const unreadCount = useMemo(
+    () => notifications.filter((item) => !item.isRead).length,
     [notifications],
   );
+
+  const latestNotifications = useMemo(
+    () => sortNotifications(notifications).slice(0, 5),
+    [notifications],
+  );
+
+  const hasNotifications = latestNotifications.length > 0;
 
   return (
     <div className="relative">
       <button
+        type="button"
         onClick={() => setOpen((prev) => !prev)}
         className="relative rounded-xl border px-4 py-2 text-sm"
       >
         🔔
-        {unreadCount > 0 ? (
+        {unreadCount > 0 && (
           <span className="absolute -right-2 -top-2 min-w-6 rounded-full bg-red-600 px-2 py-1 text-xs font-semibold text-white">
             {unreadCount}
           </span>
-        ) : null}
+        )}
       </button>
 
-      {open ? (
+      {open && (
         <div className="absolute right-0 z-50 mt-2 w-96 rounded-2xl border bg-white p-4 shadow-xl">
           <div className="flex items-center justify-between">
             <div>
@@ -122,14 +118,13 @@ export function NotificationBell() {
           </div>
 
           <div className="mt-4 space-y-3">
-            {notificationsQuery.isLoading ? (
+            {isLoading && (
               <div className="text-sm text-gray-600">Loading...</div>
-            ) : null}
+            )}
 
-            {!notificationsQuery.isLoading &&
-            latestNotifications.length === 0 ? (
+            {!isLoading && !hasNotifications && (
               <div className="text-sm text-gray-600">No notifications yet.</div>
-            ) : null}
+            )}
 
             {latestNotifications.map((notification) => (
               <div
@@ -160,7 +155,7 @@ export function NotificationBell() {
             ))}
           </div>
         </div>
-      ) : null}
+      )}
     </div>
   );
 }

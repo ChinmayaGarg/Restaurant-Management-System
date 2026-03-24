@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import "./globals.css";
 import { QueryProvider } from "@/providers/query-provider";
 import { ToastProvider } from "@/providers/toast-provider";
+import { RealtimeProvider } from "@/providers/realtime-provider";
 
 export const metadata: Metadata = {
   title: "Staff Dashboard",
@@ -17,7 +18,9 @@ export default function RootLayout({
     <html lang="en">
       <body>
         <QueryProvider>
-          <ToastProvider>{children}</ToastProvider>
+          <ToastProvider>
+            <RealtimeProvider>{children}</RealtimeProvider>
+          </ToastProvider>
         </QueryProvider>
       </body>
     </html>
