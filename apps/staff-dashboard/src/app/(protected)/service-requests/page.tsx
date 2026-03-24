@@ -1,10 +1,9 @@
 "use client";
 
-import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import Link from "next/link";
-import { useRouter } from "next/navigation";
 import { useMemo, useState } from "react";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 
+import { getTables } from "@/lib/tables-api";
 import {
   acknowledgeServiceRequest,
   createServiceRequest,
@@ -12,16 +11,23 @@ import {
   getServiceRequests,
   resolveServiceRequest,
 } from "@/lib/service-requests-api";
-import { getTables } from "@/lib/tables-api";
 import { useAuth } from "@/providers/auth-provider";
+import { useToast } from "@/providers/toast-provider";
 import { canDoAction } from "@/lib/access";
+
+import type { DiningTable } from "@/types/tables";
 import type {
   ServiceRequest,
   ServiceRequestSourceType,
   ServiceRequestStatus,
   ServiceRequestType,
 } from "@/types/service-requests";
-import type { DiningTable } from "@/types/tables";
+
+import { PageHeader } from "@/components/page-header";
+import { Card, CardContent, CardHeader } from "@/components/ui/card";
+import { Button } from "@/components/ui/button";
+import { StatusBadge } from "@/components/ui/status-badge";
+import { EmptyState } from "@/components/ui/empty-state";
 
 const REQUEST_TYPES: ServiceRequestType[] = [
   "CALL_SERVER",
@@ -39,16 +45,46 @@ const SOURCE_TYPES: ServiceRequestSourceType[] = [
   "SYSTEM",
 ];
 
-import { StatusBadge } from "@/components/ui/status-badge";
-import { PageHeader } from "@/components/page-header";
-import { Card, CardHeader, CardContent } from "@/components/ui/card";
-import { Button } from "@/components/ui/button";
-import { EmptyState } from "@/components/ui/empty-state";
+function getRequestStatusTone(status: ServiceRequestStatus) {
+  switch (status) {
+    case "OPEN":
+      return "blue";
+    case "ACKNOWLEDGED":
+      return "yellow";
+    case "RESOLVED":
+      return "green";
+    case "ESCALATED":
+      return "red";
+    case "CANCELLED":
+      return "gray";
+    default:
+      return "gray";
+  }
+}
+
+function SummaryCard({
+  label,
+  value,
+  sublabel,
+}: {
+  label: string;
+  value: number;
+  sublabel: string;
+}) {
+  return (
+    <Card className="p-5">
+      <div className="text-sm font-medium text-gray-500">{label}</div>
+      <div className="mt-2 text-3xl font-semibold">{value}</div>
+      <div className="mt-2 text-sm text-gray-600">{sublabel}</div>
+    </Card>
+  );
+}
 
 export default function ServiceRequestsPage() {
-  const router = useRouter();
   const queryClient = useQueryClient();
   const { user } = useAuth();
+  const { showToast } = useToast();
+
   const [errorMessage, setErrorMessage] = useState("");
   const [tableSessionId, setTableSessionId] = useState("");
   const [requestType, setRequestType] =
@@ -75,14 +111,28 @@ export default function ServiceRequestsPage() {
       setRequestType("CALL_SERVER");
       setSourceType("STAFF");
       setSourceDeviceId("");
+
+      showToast({
+        type: "success",
+        title: "Request created",
+        message: "The service request was created successfully.",
+      });
+
       await queryClient.invalidateQueries({ queryKey: ["service-requests"] });
+      await queryClient.invalidateQueries({ queryKey: ["notifications"] });
+      await queryClient.invalidateQueries({ queryKey: ["dashboard"] });
     },
     onError: (error) => {
-      setErrorMessage(
+      const message =
         error instanceof Error
           ? error.message
-          : "Failed to create service request",
-      );
+          : "Failed to create service request";
+      setErrorMessage(message);
+      showToast({
+        type: "error",
+        title: "Could not create request",
+        message,
+      });
     },
   });
 
@@ -90,14 +140,26 @@ export default function ServiceRequestsPage() {
     mutationFn: acknowledgeServiceRequest,
     onSuccess: async () => {
       setErrorMessage("");
+      showToast({
+        type: "success",
+        title: "Request acknowledged",
+        message: "The service request was acknowledged successfully.",
+      });
       await queryClient.invalidateQueries({ queryKey: ["service-requests"] });
+      await queryClient.invalidateQueries({ queryKey: ["notifications"] });
+      await queryClient.invalidateQueries({ queryKey: ["dashboard"] });
     },
     onError: (error) => {
-      setErrorMessage(
+      const message =
         error instanceof Error
           ? error.message
-          : "Failed to acknowledge request",
-      );
+          : "Failed to acknowledge request";
+      setErrorMessage(message);
+      showToast({
+        type: "error",
+        title: "Could not acknowledge request",
+        message,
+      });
     },
   });
 
@@ -105,12 +167,24 @@ export default function ServiceRequestsPage() {
     mutationFn: resolveServiceRequest,
     onSuccess: async () => {
       setErrorMessage("");
+      showToast({
+        type: "success",
+        title: "Request resolved",
+        message: "The service request was resolved successfully.",
+      });
       await queryClient.invalidateQueries({ queryKey: ["service-requests"] });
+      await queryClient.invalidateQueries({ queryKey: ["notifications"] });
+      await queryClient.invalidateQueries({ queryKey: ["dashboard"] });
     },
     onError: (error) => {
-      setErrorMessage(
-        error instanceof Error ? error.message : "Failed to resolve request",
-      );
+      const message =
+        error instanceof Error ? error.message : "Failed to resolve request";
+      setErrorMessage(message);
+      showToast({
+        type: "error",
+        title: "Could not resolve request",
+        message,
+      });
     },
   });
 
@@ -118,12 +192,24 @@ export default function ServiceRequestsPage() {
     mutationFn: escalateServiceRequest,
     onSuccess: async () => {
       setErrorMessage("");
+      showToast({
+        type: "success",
+        title: "Request escalated",
+        message: "The service request was escalated successfully.",
+      });
       await queryClient.invalidateQueries({ queryKey: ["service-requests"] });
+      await queryClient.invalidateQueries({ queryKey: ["notifications"] });
+      await queryClient.invalidateQueries({ queryKey: ["dashboard"] });
     },
     onError: (error) => {
-      setErrorMessage(
-        error instanceof Error ? error.message : "Failed to escalate request",
-      );
+      const message =
+        error instanceof Error ? error.message : "Failed to escalate request";
+      setErrorMessage(message);
+      showToast({
+        type: "error",
+        title: "Could not escalate request",
+        message,
+      });
     },
   });
 
@@ -140,9 +226,33 @@ export default function ServiceRequestsPage() {
     );
   }, [tablesQuery.data]);
 
+  const requests = requestsQuery.data ?? [];
+
+  const summary = useMemo(() => {
+    return {
+      totalRequests: requests.length,
+      openRequests: requests.filter((request) => request.status === "OPEN")
+        .length,
+      acknowledgedRequests: requests.filter(
+        (request) => request.status === "ACKNOWLEDGED",
+      ).length,
+      escalatedRequests: requests.filter(
+        (request) => request.status === "ESCALATED",
+      ).length,
+      resolvedRequests: requests.filter(
+        (request) => request.status === "RESOLVED",
+      ).length,
+    };
+  }, [requests]);
+
   function handleCreate() {
     if (!tableSessionId) {
       setErrorMessage("Please choose an open table session");
+      showToast({
+        type: "error",
+        title: "Missing information",
+        message: "Please choose an open table session.",
+      });
       return;
     }
 
@@ -205,198 +315,236 @@ export default function ServiceRequestsPage() {
   }
 
   return (
-    <main className="min-h-screen bg-gray-100 p-6">
-      <div className="mx-auto max-w-7xl space-y-6">
-        <PageHeader
-          title="Service Requests"
-          description="Manage waiter calls, bill requests, water requests, and more."
-        />
+    <main className="space-y-6">
+      <PageHeader
+        title="Service Requests"
+        description="Manage waiter calls, bill requests, water requests, and more."
+      />
 
-        {errorMessage ? (
-          <div className="rounded-2xl bg-red-50 p-4 text-red-600">
-            {errorMessage}
-          </div>
-        ) : null}
+      {errorMessage ? (
+        <Card className="bg-red-50 text-red-600">{errorMessage}</Card>
+      ) : null}
 
-        <div className="grid gap-6 lg:grid-cols-[420px_1fr]">
-          <Card>
-            <CardHeader title="Create request" />
-            <CardContent>
-              <div className="space-y-4">
-                <div>
-                  <label className="mb-1 block text-sm font-medium">
-                    Open table session
-                  </label>
-                  <select
-                    className="w-full rounded-xl border px-3 py-2"
-                    value={tableSessionId}
-                    onChange={(e) => setTableSessionId(e.target.value)}
-                  >
-                    <option value="">Select a table session</option>
-                    {openSessions.map((session) => (
-                      <option key={session.sessionId} value={session.sessionId}>
-                        {session.tableName} ({session.tableCode}) •{" "}
-                        {session.sectionName}
-                      </option>
-                    ))}
-                  </select>
-                </div>
+      {requestsQuery.isLoading || tablesQuery.isLoading ? (
+        <Card>Loading service requests...</Card>
+      ) : null}
 
-                <div>
-                  <label className="mb-1 block text-sm font-medium">
-                    Request type
-                  </label>
-                  <select
-                    className="w-full rounded-xl border px-3 py-2"
-                    value={requestType}
-                    onChange={(e) =>
-                      setRequestType(e.target.value as ServiceRequestType)
-                    }
-                  >
-                    {REQUEST_TYPES.map((type) => (
-                      <option key={type} value={type}>
-                        {type}
-                      </option>
-                    ))}
-                  </select>
-                </div>
+      {requestsQuery.isError || tablesQuery.isError ? (
+        <Card className="bg-red-50 text-red-600">
+          {requestsQuery.error instanceof Error
+            ? requestsQuery.error.message
+            : tablesQuery.error instanceof Error
+              ? tablesQuery.error.message
+              : "Failed to load service request data"}
+        </Card>
+      ) : null}
 
-                <div>
-                  <label className="mb-1 block text-sm font-medium">
-                    Source type
-                  </label>
-                  <select
-                    className="w-full rounded-xl border px-3 py-2"
-                    value={sourceType}
-                    onChange={(e) =>
-                      setSourceType(e.target.value as ServiceRequestSourceType)
-                    }
-                  >
-                    {SOURCE_TYPES.map((type) => (
-                      <option key={type} value={type}>
-                        {type}
-                      </option>
-                    ))}
-                  </select>
-                </div>
+      {!requestsQuery.isLoading && (
+        <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-5">
+          <SummaryCard
+            label="Total Requests"
+            value={summary.totalRequests}
+            sublabel="All requests currently loaded"
+          />
+          <SummaryCard
+            label="Open"
+            value={summary.openRequests}
+            sublabel="Still waiting for response"
+          />
+          <SummaryCard
+            label="Acknowledged"
+            value={summary.acknowledgedRequests}
+            sublabel="Seen and being handled"
+          />
+          <SummaryCard
+            label="Escalated"
+            value={summary.escalatedRequests}
+            sublabel="Needs higher attention"
+          />
+          <SummaryCard
+            label="Resolved"
+            value={summary.resolvedRequests}
+            sublabel="Completed requests"
+          />
+        </div>
+      )}
 
-                <div>
-                  <label className="mb-1 block text-sm font-medium">
-                    Source device ID
-                  </label>
-                  <input
-                    className="w-full rounded-xl border px-3 py-2"
-                    value={sourceDeviceId}
-                    onChange={(e) => setSourceDeviceId(e.target.value)}
-                    placeholder="Optional device identifier"
-                  />
-                </div>
+      <div className="grid gap-6 lg:grid-cols-[420px_1fr]">
+        <Card>
+          <CardHeader
+            title="Create request"
+            description="Choose an open table session and request type."
+          />
 
-                {canDoAction(user, "serviceRequests.create") ? (
-                  <Button
-                    onClick={handleCreate}
-                    disabled={createMutation.isPending}
-                  >
-                    {createMutation.isPending
-                      ? "Creating..."
-                      : "Create request"}
-                  </Button>
-                ) : (
-                  <div className="rounded-xl bg-gray-50 px-3 py-2 text-sm text-gray-500">
-                    You do not have permission to create service requests.
-                  </div>
-                )}
+          <CardContent className="space-y-4">
+            <div>
+              <label className="mb-1 block text-sm font-medium">
+                Open table session
+              </label>
+              <select
+                className="w-full rounded-xl border px-3 py-2"
+                value={tableSessionId}
+                onChange={(e) => setTableSessionId(e.target.value)}
+              >
+                <option value="">Select a table session</option>
+                {openSessions.map((session) => (
+                  <option key={session.sessionId} value={session.sessionId}>
+                    {session.tableName} ({session.tableCode}) •{" "}
+                    {session.sectionName}
+                  </option>
+                ))}
+              </select>
+            </div>
+
+            <div>
+              <label className="mb-1 block text-sm font-medium">
+                Request type
+              </label>
+              <select
+                className="w-full rounded-xl border px-3 py-2"
+                value={requestType}
+                onChange={(e) =>
+                  setRequestType(e.target.value as ServiceRequestType)
+                }
+              >
+                {REQUEST_TYPES.map((type) => (
+                  <option key={type} value={type}>
+                    {type}
+                  </option>
+                ))}
+              </select>
+            </div>
+
+            <div>
+              <label className="mb-1 block text-sm font-medium">
+                Source type
+              </label>
+              <select
+                className="w-full rounded-xl border px-3 py-2"
+                value={sourceType}
+                onChange={(e) =>
+                  setSourceType(e.target.value as ServiceRequestSourceType)
+                }
+              >
+                {SOURCE_TYPES.map((type) => (
+                  <option key={type} value={type}>
+                    {type}
+                  </option>
+                ))}
+              </select>
+            </div>
+
+            <div>
+              <label className="mb-1 block text-sm font-medium">
+                Source device ID
+              </label>
+              <input
+                className="w-full rounded-xl border px-3 py-2"
+                value={sourceDeviceId}
+                onChange={(e) => setSourceDeviceId(e.target.value)}
+                placeholder="Optional device identifier"
+              />
+            </div>
+
+            {canDoAction(user, "serviceRequests.create") ? (
+              <Button
+                className="w-full"
+                onClick={handleCreate}
+                disabled={createMutation.isPending}
+              >
+                {createMutation.isPending ? "Creating..." : "Create request"}
+              </Button>
+            ) : (
+              <div className="rounded-xl bg-gray-50 px-3 py-2 text-sm text-gray-500">
+                You do not have permission to create service requests.
               </div>
-            </CardContent>
-          </Card>
+            )}
+          </CardContent>
+        </Card>
 
-          <Card>
-            <CardHeader title="All service requests" />
-            <CardContent>
-              {requestsQuery.isLoading ? (
-                <div className="text-sm text-gray-600">
-                  Loading service requests...
-                </div>
-              ) : null}
+        <Card>
+          <CardHeader
+            title="All service requests"
+            description="Track and manage active floor-side requests."
+          />
 
-              {requestsQuery.isError ? (
-                <div className="rounded-xl bg-red-50 p-4 text-red-600">
-                  {requestsQuery.error instanceof Error
-                    ? requestsQuery.error.message
-                    : "Failed to load service requests"}
-                </div>
-              ) : null}
+          <CardContent className="space-y-4">
+            {requests.length === 0 && !requestsQuery.isLoading ? (
+              <EmptyState
+                title="No service requests yet"
+                description="Create a request from the left panel to get started."
+              />
+            ) : null}
 
-              <div className="space-y-4">
-                {(requestsQuery.data ?? []).map((request) => (
-                  <Card key={request.id} className="p-4">
-                    <div className="flex flex-col gap-3 md:flex-row md:items-start md:justify-between">
-                      <div className="space-y-2">
-                        <div className="flex items-center gap-3">
-                          <div className="font-semibold">
-                            {request.tableSession.table.displayName} •{" "}
-                            {request.tableSession.table.section.name}
-                          </div>
-                          <StatusBadge
-                            label={request.status}
-                            tone={
-                              request.status === "OPEN"
-                                ? "blue"
-                                : request.status === "ACKNOWLEDGED"
-                                  ? "yellow"
-                                  : request.status === "RESOLVED"
-                                    ? "green"
-                                    : request.status === "ESCALATED"
-                                      ? "red"
-                                      : "gray"
-                            }
-                          />
-                        </div>
-
-                        <div className="text-sm text-gray-600">
-                          Request: {request.requestType}
-                        </div>
-
-                        <div className="text-sm text-gray-600">
-                          Source: {request.sourceType}
-                        </div>
-
-                        {request.createdByUser ? (
-                          <div className="text-sm text-gray-600">
-                            Created by: {request.createdByUser.firstName}{" "}
-                            {request.createdByUser.lastName}
-                          </div>
-                        ) : null}
-
-                        {request.assignedToUser ? (
-                          <div className="text-sm text-gray-600">
-                            Assigned to: {request.assignedToUser.firstName}{" "}
-                            {request.assignedToUser.lastName}
-                          </div>
-                        ) : null}
-
-                        <div className="text-xs text-gray-500">
-                          Created:{" "}
-                          {new Date(request.createdAt).toLocaleString()}
-                        </div>
+            {requests.map((request) => (
+              <Card key={request.id} className="border p-4 shadow-none">
+                <div className="flex flex-col gap-3 md:flex-row md:items-start md:justify-between">
+                  <div className="space-y-2">
+                    <div className="flex items-center gap-3">
+                      <div className="font-semibold">
+                        {request.tableSession.table.displayName} •{" "}
+                        {request.tableSession.table.section.name}
                       </div>
 
-                      {renderActions(request)}
+                      <StatusBadge
+                        label={request.status}
+                        tone={getRequestStatusTone(request.status)}
+                      />
                     </div>
-                  </Card>
-                ))}
 
-                {!requestsQuery.isLoading &&
-                (requestsQuery.data ?? []).length === 0 ? (
-                  <EmptyState
-                    title="No service requests yet"
-                    description="New requests will appear here."
-                  />
-                ) : null}
-              </div>
-            </CardContent>
-          </Card>
-        </div>
+                    <div className="text-sm text-gray-600">
+                      Request: {request.requestType}
+                    </div>
+
+                    <div className="text-sm text-gray-600">
+                      Source: {request.sourceType}
+                    </div>
+
+                    {request.createdByUser ? (
+                      <div className="text-sm text-gray-600">
+                        Created by: {request.createdByUser.firstName}{" "}
+                        {request.createdByUser.lastName}
+                      </div>
+                    ) : null}
+
+                    {request.assignedToUser ? (
+                      <div className="text-sm text-gray-600">
+                        Assigned to: {request.assignedToUser.firstName}{" "}
+                        {request.assignedToUser.lastName}
+                      </div>
+                    ) : null}
+
+                    {request.sourceDeviceId ? (
+                      <div className="text-sm text-gray-600">
+                        Device: {request.sourceDeviceId}
+                      </div>
+                    ) : null}
+
+                    <div className="text-xs text-gray-500">
+                      Created: {new Date(request.createdAt).toLocaleString()}
+                    </div>
+
+                    {request.acknowledgedAt ? (
+                      <div className="text-xs text-gray-500">
+                        Acknowledged:{" "}
+                        {new Date(request.acknowledgedAt).toLocaleString()}
+                      </div>
+                    ) : null}
+
+                    {request.resolvedAt ? (
+                      <div className="text-xs text-gray-500">
+                        Resolved:{" "}
+                        {new Date(request.resolvedAt).toLocaleString()}
+                      </div>
+                    ) : null}
+                  </div>
+
+                  {renderActions(request)}
+                </div>
+              </Card>
+            ))}
+          </CardContent>
+        </Card>
       </div>
     </main>
   );
