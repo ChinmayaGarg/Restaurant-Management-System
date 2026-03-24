@@ -23,6 +23,10 @@ const TABLE_STATUSES: TableStatus[] = [
   "OUT_OF_SERVICE",
 ];
 
+import { useToast } from "@/providers/toast-provider";
+import { ConfirmDialog } from "@/components/confirm-dialog";
+import { PageHeader } from "@/components/page-header";
+
 function getStatusClasses(status: TableStatus) {
   switch (status) {
     case "AVAILABLE":
@@ -50,6 +54,11 @@ export default function TablesPage() {
     Record<string, string>
   >({});
 
+  const { showToast } = useToast();
+
+  const [confirmCloseTableId, setConfirmCloseTableId] = useState<string | null>(
+    null,
+  );
   const tablesQuery = useQuery({
     queryKey: ["tables"],
     queryFn: getTables,
@@ -61,12 +70,22 @@ export default function TablesPage() {
     onSuccess: async () => {
       setErrorMessage("");
       setOpeningTableId(null);
+      showToast({
+        type: "success",
+        title: "Session opened",
+        message: "The table session was opened successfully.",
+      });
       await queryClient.invalidateQueries({ queryKey: ["tables"] });
     },
     onError: (error) => {
-      setErrorMessage(
-        error instanceof Error ? error.message : "Failed to open session",
-      );
+      const message =
+        error instanceof Error ? error.message : "Failed to open session";
+      setErrorMessage(message);
+      showToast({
+        type: "error",
+        title: "Could not open session",
+        message,
+      });
     },
   });
 
@@ -74,12 +93,23 @@ export default function TablesPage() {
     mutationFn: async (tableId: string) => closeTableSession(tableId),
     onSuccess: async () => {
       setErrorMessage("");
+      setConfirmCloseTableId(null);
+      showToast({
+        type: "success",
+        title: "Session closed",
+        message: "The table session was closed successfully.",
+      });
       await queryClient.invalidateQueries({ queryKey: ["tables"] });
     },
     onError: (error) => {
-      setErrorMessage(
-        error instanceof Error ? error.message : "Failed to close session",
-      );
+      const message =
+        error instanceof Error ? error.message : "Failed to close session";
+      setErrorMessage(message);
+      showToast({
+        type: "error",
+        title: "Could not close session",
+        message,
+      });
     },
   });
 
@@ -88,14 +118,24 @@ export default function TablesPage() {
       updateTableStatus(params.tableId, params.status),
     onSuccess: async () => {
       setErrorMessage("");
+      showToast({
+        type: "success",
+        title: "Table updated",
+        message: "The table status was updated.",
+      });
       await queryClient.invalidateQueries({ queryKey: ["tables"] });
     },
     onError: (error) => {
-      setErrorMessage(
+      const message =
         error instanceof Error
           ? error.message
-          : "Failed to update table status",
-      );
+          : "Failed to update table status";
+      setErrorMessage(message);
+      showToast({
+        type: "error",
+        title: "Could not update table",
+        message,
+      });
     },
   });
 
@@ -126,18 +166,10 @@ export default function TablesPage() {
   return (
     <main className="min-h-screen bg-gray-100 p-6">
       <div className="mx-auto max-w-6xl space-y-6">
-        <div className="flex items-center justify-between rounded-2xl bg-white p-6 shadow">
-          <div>
-            <h1 className="text-2xl font-semibold">Tables</h1>
-            <p className="mt-1 text-sm text-gray-600">
-              Manage table status and dining sessions.
-            </p>
-          </div>
-
-          <Link href="/dashboard" className="rounded-xl border px-4 py-2">
-            Back to dashboard
-          </Link>
-        </div>
+        <PageHeader
+          title="Tables"
+          description="Manage table status and dining sessions."
+        />
 
         {errorMessage ? (
           <div className="rounded-2xl bg-red-50 p-4 text-red-600">
@@ -244,15 +276,11 @@ export default function TablesPage() {
 
                         {canDoAction(user, "tables.closeSession") ? (
                           <button
-                            onClick={() =>
-                              closeSessionMutation.mutate(table.id)
-                            }
+                            onClick={() => setConfirmCloseTableId(table.id)}
                             disabled={busy}
                             className="mt-3 w-full rounded-xl border px-4 py-2"
                           >
-                            {closeSessionMutation.isPending
-                              ? "Closing..."
-                              : "Close session"}
+                            Close session
                           </button>
                         ) : null}
                       </div>
@@ -319,6 +347,19 @@ export default function TablesPage() {
             </div>
           </section>
         ))}
+        <ConfirmDialog
+          open={Boolean(confirmCloseTableId)}
+          title="Close table session?"
+          message="This will close the active dining session for this table."
+          confirmLabel="Close session"
+          loading={closeSessionMutation.isPending}
+          onCancel={() => setConfirmCloseTableId(null)}
+          onConfirm={() => {
+            if (confirmCloseTableId) {
+              closeSessionMutation.mutate(confirmCloseTableId);
+            }
+          }}
+        />
       </div>
     </main>
   );

@@ -18,6 +18,10 @@ import { getTables } from "@/lib/tables-api";
 import type { Bill, PaymentSummary } from "@/types/billing";
 import type { DiningTable } from "@/types/tables";
 
+import { useToast } from "@/providers/toast-provider";
+import { ConfirmDialog } from "@/components/confirm-dialog";
+import { PageHeader } from "@/components/page-header";
+
 function toMoney(value: string | number) {
   const number = typeof value === "string" ? Number(value) : value;
   return `$${number.toFixed(2)}`;
@@ -27,6 +31,8 @@ export default function BillingPage() {
   const router = useRouter();
   const queryClient = useQueryClient();
   const { user } = useAuth();
+  const { showToast } = useToast();
+  const [confirmCloseOpen, setConfirmCloseOpen] = useState(false);
   const [errorMessage, setErrorMessage] = useState("");
   const [tableSessionId, setTableSessionId] = useState("");
   const [billId, setBillId] = useState("");
@@ -70,15 +76,25 @@ export default function BillingPage() {
     onSuccess: async (bill) => {
       setErrorMessage("");
       setBillId(bill.id);
+      showToast({
+        type: "success",
+        title: "Bill generated",
+        message: `Bill ${bill.billNumber} was created successfully.`,
+      });
       await queryClient.invalidateQueries({ queryKey: ["bill", bill.id] });
       await queryClient.invalidateQueries({
         queryKey: ["payment-summary", bill.id],
       });
     },
     onError: (error) => {
-      setErrorMessage(
-        error instanceof Error ? error.message : "Failed to generate bill",
-      );
+      const message =
+        error instanceof Error ? error.message : "Failed to generate bill";
+      setErrorMessage(message);
+      showToast({
+        type: "error",
+        title: "Could not generate bill",
+        message,
+      });
     },
   });
 
@@ -86,15 +102,26 @@ export default function BillingPage() {
     mutationFn: (id: string) => closeBill(id),
     onSuccess: async (bill) => {
       setErrorMessage("");
+      setConfirmCloseOpen(false);
+      showToast({
+        type: "success",
+        title: "Bill closed",
+        message: `Bill ${bill.billNumber} was closed successfully.`,
+      });
       await queryClient.invalidateQueries({ queryKey: ["bill", bill.id] });
       await queryClient.invalidateQueries({
         queryKey: ["payment-summary", bill.id],
       });
     },
     onError: (error) => {
-      setErrorMessage(
-        error instanceof Error ? error.message : "Failed to close bill",
-      );
+      const message =
+        error instanceof Error ? error.message : "Failed to close bill";
+      setErrorMessage(message);
+      showToast({
+        type: "error",
+        title: "Could not close bill",
+        message,
+      });
     },
   });
 
@@ -155,19 +182,10 @@ export default function BillingPage() {
   return (
     <main className="min-h-screen bg-gray-100 p-6">
       <div className="mx-auto max-w-7xl space-y-6">
-        <div className="flex items-center justify-between rounded-2xl bg-white p-6 shadow">
-          <div>
-            <h1 className="text-2xl font-semibold">Billing & Payments</h1>
-            <p className="mt-1 text-sm text-gray-600">
-              Generate bills, inspect bill details, record payments, and close
-              bills.
-            </p>
-          </div>
-
-          <Link href="/dashboard" className="rounded-xl border px-4 py-2">
-            Back to dashboard
-          </Link>
-        </div>
+        <PageHeader
+          title="Billing & Payments"
+          description="Generate bills, inspect bill details, record payments, and close bills."
+        />
 
         {errorMessage ? (
           <div className="rounded-2xl bg-red-50 p-4 text-red-600">
@@ -330,11 +348,11 @@ export default function BillingPage() {
 
                 {bill && canDoAction(user, "billing.close") ? (
                   <button
-                    onClick={() => closeBillMutation.mutate(bill.id)}
+                    onClick={() => setConfirmCloseOpen(true)}
                     disabled={closeBillMutation.isPending}
                     className="rounded-xl border px-4 py-2"
                   >
-                    {closeBillMutation.isPending ? "Closing..." : "Close bill"}
+                    Close bill
                   </button>
                 ) : null}
               </div>
@@ -477,6 +495,19 @@ export default function BillingPage() {
               )}
             </div>
           </section>
+          <ConfirmDialog
+            open={confirmCloseOpen}
+            title="Close bill?"
+            message="This will mark the bill as closed."
+            confirmLabel="Close bill"
+            loading={closeBillMutation.isPending}
+            onCancel={() => setConfirmCloseOpen(false)}
+            onConfirm={() => {
+              if (bill) {
+                closeBillMutation.mutate(bill.id);
+              }
+            }}
+          />
         </div>
       </div>
     </main>
