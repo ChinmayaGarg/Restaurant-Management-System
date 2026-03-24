@@ -114,6 +114,24 @@ enum AuditEntityType {
   SETTINGS
 }
 
+enum CourseType {
+  APPETIZER
+  ENTREE
+  DESSERT
+  DRINK
+  SIDE
+  OTHER
+}
+
+enum FireStatus {
+  HOLD
+  FIRED
+  IN_PREP
+  READY
+  SERVED
+  VOIDED
+}
+
 ////////////////////////
 // RESTAURANT STRUCTURE
 ////////////////////////
@@ -191,10 +209,15 @@ model User {
   scopes         AccessScope[]
 
   openedSessions TableSession[] @relation("OpenedByUser")
-  assignedSessions TableSession[] @relation("AssignedServer")
+  assignedServerSessions TableSession[] @relation("AssignedServerSessions")
+  assignedByUserSessions TableSession[] @relation("AssignedByUserSessions")
   createdOrders  Order[]        @relation("CreatedByUser")
   orderStatusHistory OrderStatusHistory[]
   createdServiceRequests ServiceRequest[] @relation("CreatedServiceRequestByUser")
+  tableAssignmentsFrom TableSessionAssignmentHistory[] @relation("TableAssignmentFromUser")
+  tableAssignmentsTo TableSessionAssignmentHistory[] @relation("TableAssignmentToUser")
+  tableAssignmentsChanged TableSessionAssignmentHistory[] @relation("TableAssignmentChangedByUser")
+  orderItemsAdded OrderItem[] @relation("OrderItemsAddedByUser")
   assignedServiceRequests ServiceRequest[] @relation("AssignedServiceRequestToUser")
   serviceRequestHistory ServiceRequestHistory[]
   generatedBills Bill[]         @relation("GeneratedByUser")
@@ -314,6 +337,8 @@ model TableSession {
   tableId          String
   openedByUserId   String
   assignedServerId String?
+  assignedByUserId String?
+  assignedAt       DateTime?
   status           TableSessionStatus @default(OPEN)
   guestCount       Int?
   openedAt         DateTime           @default(now())
@@ -323,16 +348,55 @@ model TableSession {
 
   table            DiningTable        @relation(fields: [tableId], references: [id], onDelete: Restrict)
   openedByUser     User               @relation("OpenedByUser", fields: [openedByUserId], references: [id], onDelete: Restrict)
-  assignedServer   User?              @relation("AssignedServer", fields: [assignedServerId], references: [id], onDelete: SetNull)
+  assignedServer   User?              @relation("AssignedServerSessions", fields: [assignedServerId], references: [id], onDelete: SetNull)
+  assignedByUser   User?              @relation("AssignedByUserSessions", fields: [assignedByUserId], references: [id], onDelete: SetNull)
 
   orders           Order[]
   serviceRequests  ServiceRequest[]
   bills            Bill[]
+  seatAssignments  SeatAssignment[]
+  assignmentHistory TableSessionAssignmentHistory[]
 
   @@index([tableId])
   @@index([openedByUserId])
   @@index([assignedServerId])
   @@index([status])
+}
+
+model SeatAssignment {
+  id             String       @id @default(cuid())
+  tableSessionId String
+  seatNumber     Int?
+  label          String
+  isShared       Boolean      @default(false)
+  isActive       Boolean      @default(true)
+  createdAt      DateTime     @default(now())
+  updatedAt      DateTime     @updatedAt
+
+  tableSession   TableSession @relation(fields: [tableSessionId], references: [id], onDelete: Cascade)
+  orderItems     OrderItem[]
+
+  @@index([tableSessionId])
+  @@unique([tableSessionId, seatNumber])
+}
+
+model TableSessionAssignmentHistory {
+  id               String       @id @default(cuid())
+  tableSessionId   String
+  fromUserId       String?
+  toUserId         String?
+  changedByUserId  String
+  reason           String?
+  startedAt        DateTime     @default(now())
+  endedAt          DateTime?
+
+  tableSession     TableSession @relation(fields: [tableSessionId], references: [id], onDelete: Cascade)
+  fromUser         User?        @relation("TableAssignmentFromUser", fields: [fromUserId], references: [id], onDelete: SetNull)
+  toUser           User?        @relation("TableAssignmentToUser", fields: [toUserId], references: [id], onDelete: SetNull)
+  changedByUser    User         @relation("TableAssignmentChangedByUser", fields: [changedByUserId], references: [id], onDelete: Restrict)
+
+  @@index([tableSessionId])
+  @@index([toUserId])
 }
 
 ////////////////////////
@@ -436,22 +500,33 @@ model OrderItem {
   id                 String          @id @default(cuid())
   orderId            String
   menuItemId         String
+  seatAssignmentId   String?
   quantity           Int
   unitPrice          Decimal         @db.Decimal(10, 2)
   lineTotal          Decimal         @db.Decimal(10, 2)
   specialInstructions String?
   status             OrderItemStatus @default(PENDING)
+  courseType         CourseType      @default(ENTREE)
+  courseRound        Int             @default(1)
+  fireStatus         FireStatus      @default(FIRED)
+  addedByUserId      String?
   createdAt          DateTime        @default(now())
   updatedAt          DateTime        @updatedAt
 
   order              Order           @relation(fields: [orderId], references: [id], onDelete: Cascade)
   menuItem           MenuItem        @relation(fields: [menuItemId], references: [id], onDelete: Restrict)
+  seatAssignment     SeatAssignment? @relation(fields: [seatAssignmentId], references: [id], onDelete: SetNull)
+  addedByUser        User?           @relation("OrderItemsAddedByUser", fields: [addedByUserId], references: [id], onDelete: SetNull)
   modifiers          OrderItemModifier[]
   billItems          BillItem[]
 
   @@index([orderId])
   @@index([menuItemId])
   @@index([status])
+  @@index([seatAssignmentId])
+  @@index([addedByUserId])
+  @@index([courseType])
+  @@index([fireStatus])
 }
 
 model OrderItemModifier {
