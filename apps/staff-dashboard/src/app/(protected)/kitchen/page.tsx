@@ -4,7 +4,8 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useMemo, useState } from "react";
-
+import { useAuth } from "@/providers/auth-provider";
+import { canDoAction } from "@/lib/access";
 import {
   getKitchenQueue,
   updateKitchenItemAvailability,
@@ -34,7 +35,7 @@ export default function KitchenPage() {
   const queryClient = useQueryClient();
 
   const [errorMessage, setErrorMessage] = useState("");
-
+  const { user } = useAuth();
   const queueQuery = useQuery({
     queryKey: ["kitchen-queue"],
     queryFn: getKitchenQueue,
@@ -113,18 +114,20 @@ export default function KitchenPage() {
             ) : null}
           </div>
 
-          <button
-            onClick={() =>
-              updateAvailabilityMutation.mutate({
-                itemId: item.menuItem.id,
-                isAvailable: false,
-              })
-            }
-            disabled={busy}
-            className="rounded-xl border px-3 py-2 text-sm"
-          >
-            Mark unavailable
-          </button>
+          {canDoAction(user, "kitchen.updateItemAvailability") ? (
+            <button
+              onClick={() =>
+                updateAvailabilityMutation.mutate({
+                  itemId: item.menuItem.id,
+                  isAvailable: false,
+                })
+              }
+              disabled={busy}
+              className="rounded-xl border px-3 py-2 text-sm"
+            >
+              Mark unavailable
+            </button>
+          ) : null}
         </div>
       </div>
     );
@@ -165,23 +168,29 @@ export default function KitchenPage() {
             <label className="mb-1 block text-sm font-medium">
               Kitchen status
             </label>
-            <select
-              className="w-full rounded-xl border px-3 py-2"
-              value={order.status}
-              onChange={(e) =>
-                updateStatusMutation.mutate({
-                  orderId: order.id,
-                  status: e.target.value as OrderStatus,
-                })
-              }
-              disabled={busy}
-            >
-              {KITCHEN_STATUSES.map((status) => (
-                <option key={status} value={status}>
-                  {status}
-                </option>
-              ))}
-            </select>
+            {canDoAction(user, "kitchen.updateStatus") ? (
+              <select
+                className="w-full rounded-xl border px-3 py-2"
+                value={order.status}
+                onChange={(e) =>
+                  updateStatusMutation.mutate({
+                    orderId: order.id,
+                    status: e.target.value as OrderStatus,
+                  })
+                }
+                disabled={busy}
+              >
+                {KITCHEN_STATUSES.map((status) => (
+                  <option key={status} value={status}>
+                    {status}
+                  </option>
+                ))}
+              </select>
+            ) : (
+              <div className="rounded-xl border px-3 py-2 text-sm text-gray-600">
+                {order.status}
+              </div>
+            )}
           </div>
         </div>
 

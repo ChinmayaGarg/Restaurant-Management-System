@@ -4,7 +4,8 @@ import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-
+import { useAuth } from "@/providers/auth-provider";
+import { canDoAction } from "@/lib/access";
 import { getToken } from "@/lib/auth";
 import {
   closeTableSession,
@@ -42,7 +43,7 @@ function getStatusClasses(status: TableStatus) {
 export default function TablesPage() {
   const router = useRouter();
   const queryClient = useQueryClient();
-
+  const { user } = useAuth();
   const [errorMessage, setErrorMessage] = useState("");
   const [openingTableId, setOpeningTableId] = useState<string | null>(null);
   const [guestCountByTable, setGuestCountByTable] = useState<
@@ -201,23 +202,29 @@ export default function TablesPage() {
                       <label className="mb-1 block text-sm font-medium">
                         Table status
                       </label>
-                      <select
-                        className="w-full rounded-xl border px-3 py-2"
-                        value={table.status}
-                        onChange={(e) =>
-                          handleStatusChange(
-                            table.id,
-                            e.target.value as TableStatus,
-                          )
-                        }
-                        disabled={busy}
-                      >
-                        {TABLE_STATUSES.map((status) => (
-                          <option key={status} value={status}>
-                            {status}
-                          </option>
-                        ))}
-                      </select>
+                      {canDoAction(user, "tables.updateStatus") ? (
+                        <select
+                          className="w-full rounded-xl border px-3 py-2"
+                          value={table.status}
+                          onChange={(e) =>
+                            handleStatusChange(
+                              table.id,
+                              e.target.value as TableStatus,
+                            )
+                          }
+                          disabled={busy}
+                        >
+                          {TABLE_STATUSES.map((status) => (
+                            <option key={status} value={status}>
+                              {status}
+                            </option>
+                          ))}
+                        </select>
+                      ) : (
+                        <div className="rounded-xl border px-3 py-2 text-sm text-gray-600">
+                          {table.status}
+                        </div>
+                      )}
                     </div>
 
                     {openSession ? (
@@ -235,15 +242,19 @@ export default function TablesPage() {
                           {new Date(openSession.openedAt).toLocaleString()}
                         </div>
 
-                        <button
-                          onClick={() => closeSessionMutation.mutate(table.id)}
-                          disabled={busy}
-                          className="mt-3 w-full rounded-xl border px-4 py-2"
-                        >
-                          {closeSessionMutation.isPending
-                            ? "Closing..."
-                            : "Close session"}
-                        </button>
+                        {canDoAction(user, "tables.closeSession") ? (
+                          <button
+                            onClick={() =>
+                              closeSessionMutation.mutate(table.id)
+                            }
+                            disabled={busy}
+                            className="mt-3 w-full rounded-xl border px-4 py-2"
+                          >
+                            {closeSessionMutation.isPending
+                              ? "Closing..."
+                              : "Close session"}
+                          </button>
+                        ) : null}
                       </div>
                     ) : (
                       <div className="mt-4 rounded-xl bg-gray-50 p-4">
@@ -287,7 +298,7 @@ export default function TablesPage() {
                               </button>
                             </div>
                           </div>
-                        ) : (
+                        ) : canDoAction(user, "tables.openSession") ? (
                           <button
                             onClick={() => setOpeningTableId(table.id)}
                             disabled={busy}
@@ -295,6 +306,10 @@ export default function TablesPage() {
                           >
                             Open session
                           </button>
+                        ) : (
+                          <div className="text-sm text-gray-500">
+                            You do not have access to open sessions.
+                          </div>
                         )}
                       </div>
                     )}

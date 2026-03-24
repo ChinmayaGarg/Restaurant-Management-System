@@ -4,7 +4,8 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useCallback, useMemo, useState } from "react";
-
+import { useAuth } from "@/providers/auth-provider";
+import { canDoAction } from "@/lib/access";
 import { useNotificationsSocket } from "@/hooks/use-notifications-socket";
 import { getToken } from "@/lib/auth";
 import {
@@ -38,7 +39,7 @@ function getTypeBadgeClasses(type: string) {
 export default function NotificationsPage() {
   const router = useRouter();
   const queryClient = useQueryClient();
-
+  const { user } = useAuth();
   const [errorMessage, setErrorMessage] = useState("");
   const [liveNotifications, setLiveNotifications] = useState<
     NotificationItem[]
@@ -234,7 +235,8 @@ export default function NotificationsPage() {
                   ) : null}
                 </div>
 
-                {!notification.isRead ? (
+                {!notification.isRead &&
+                canDoAction(user, "notifications.markRead") ? (
                   <button
                     onClick={() => markReadMutation.mutate(notification.id)}
                     disabled={markReadMutation.isPending}

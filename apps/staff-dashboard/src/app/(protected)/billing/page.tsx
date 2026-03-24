@@ -4,6 +4,8 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useMemo, useState } from "react";
+import { useAuth } from "@/providers/auth-provider";
+import { canDoAction } from "@/lib/access";
 
 import { closeBill, generateBill, getBill } from "@/lib/billing-api";
 import {
@@ -24,7 +26,7 @@ function toMoney(value: string | number) {
 export default function BillingPage() {
   const router = useRouter();
   const queryClient = useQueryClient();
-
+  const { user } = useAuth();
   const [errorMessage, setErrorMessage] = useState("");
   const [tableSessionId, setTableSessionId] = useState("");
   const [billId, setBillId] = useState("");
@@ -198,15 +200,21 @@ export default function BillingPage() {
                   </select>
                 </div>
 
-                <button
-                  onClick={() => generateBillMutation.mutate(tableSessionId)}
-                  disabled={!tableSessionId || generateBillMutation.isPending}
-                  className="w-full rounded-xl bg-black px-4 py-2 text-white disabled:opacity-60"
-                >
-                  {generateBillMutation.isPending
-                    ? "Generating..."
-                    : "Generate bill"}
-                </button>
+                {canDoAction(user, "billing.generate") ? (
+                  <button
+                    onClick={() => generateBillMutation.mutate(tableSessionId)}
+                    disabled={!tableSessionId || generateBillMutation.isPending}
+                    className="w-full rounded-xl bg-black px-4 py-2 text-white disabled:opacity-60"
+                  >
+                    {generateBillMutation.isPending
+                      ? "Generating..."
+                      : "Generate bill"}
+                  </button>
+                ) : (
+                  <div className="rounded-xl bg-gray-50 px-3 py-2 text-sm text-gray-500">
+                    You do not have permission to generate bills.
+                  </div>
+                )}
               </div>
             </div>
 
@@ -242,17 +250,23 @@ export default function BillingPage() {
                   onChange={(e) => setCashNote(e.target.value)}
                   placeholder="Optional note"
                 />
-                <button
-                  onClick={() => markCashMutation.mutate()}
-                  disabled={
-                    !billId || !cashAmount || markCashMutation.isPending
-                  }
-                  className="w-full rounded-xl border px-4 py-2"
-                >
-                  {markCashMutation.isPending
-                    ? "Saving..."
-                    : "Mark cash payment"}
-                </button>
+                {canDoAction(user, "payments.markCash") ? (
+                  <button
+                    onClick={() => markCashMutation.mutate()}
+                    disabled={
+                      !billId || !cashAmount || markCashMutation.isPending
+                    }
+                    className="w-full rounded-xl border px-4 py-2"
+                  >
+                    {markCashMutation.isPending
+                      ? "Saving..."
+                      : "Mark cash payment"}
+                  </button>
+                ) : (
+                  <div className="rounded-xl bg-gray-50 px-3 py-2 text-sm text-gray-500">
+                    You do not have permission to record cash payments.
+                  </div>
+                )}
               </div>
             </div>
 
@@ -281,17 +295,23 @@ export default function BillingPage() {
                   onChange={(e) => setCardReference(e.target.value)}
                   placeholder="Reference"
                 />
-                <button
-                  onClick={() => markCardMutation.mutate()}
-                  disabled={
-                    !billId || !cardAmount || markCardMutation.isPending
-                  }
-                  className="w-full rounded-xl border px-4 py-2"
-                >
-                  {markCardMutation.isPending
-                    ? "Saving..."
-                    : "Mark card payment"}
-                </button>
+                {canDoAction(user, "payments.markCard") ? (
+                  <button
+                    onClick={() => markCardMutation.mutate()}
+                    disabled={
+                      !billId || !cardAmount || markCardMutation.isPending
+                    }
+                    className="w-full rounded-xl border px-4 py-2"
+                  >
+                    {markCardMutation.isPending
+                      ? "Saving..."
+                      : "Mark card payment"}
+                  </button>
+                ) : (
+                  <div className="rounded-xl bg-gray-50 px-3 py-2 text-sm text-gray-500">
+                    You do not have permission to record card payments.
+                  </div>
+                )}
               </div>
             </div>
           </section>
@@ -308,7 +328,7 @@ export default function BillingPage() {
                   ) : null}
                 </div>
 
-                {bill ? (
+                {bill && canDoAction(user, "billing.close") ? (
                   <button
                     onClick={() => closeBillMutation.mutate(bill.id)}
                     disabled={closeBillMutation.isPending}

@@ -12,7 +12,8 @@ import { getTables } from "@/lib/tables-api";
 import type { MenuCategory, MenuItem } from "@/types/menu";
 import type { OrderSourceType, OrderStatus } from "@/types/orders";
 import type { DiningTable } from "@/types/tables";
-
+import { useAuth } from "@/providers/auth-provider";
+import { canDoAction } from "@/lib/access";
 const ORDER_STATUSES: OrderStatus[] = [
   "PLACED",
   "ACCEPTED",
@@ -34,6 +35,8 @@ export default function OrdersPage() {
   const [specialInstructions, setSpecialInstructions] = useState("");
   const [notes, setNotes] = useState("");
   const [sourceType, setSourceType] = useState<OrderSourceType>("STAFF");
+
+  const { user } = useAuth();
 
   const ordersQuery = useQuery({
     queryKey: ["orders"],
@@ -246,13 +249,21 @@ export default function OrdersPage() {
                 />
               </div>
 
-              <button
-                onClick={handleCreateOrder}
-                disabled={createOrderMutation.isPending}
-                className="w-full rounded-xl bg-black px-4 py-2 text-white disabled:opacity-60"
-              >
-                {createOrderMutation.isPending ? "Creating..." : "Create order"}
-              </button>
+              {canDoAction(user, "orders.create") ? (
+                <button
+                  onClick={handleCreateOrder}
+                  disabled={createOrderMutation.isPending}
+                  className="w-full rounded-xl bg-black px-4 py-2 text-white disabled:opacity-60"
+                >
+                  {createOrderMutation.isPending
+                    ? "Creating..."
+                    : "Create order"}
+                </button>
+              ) : (
+                <div className="rounded-xl bg-gray-50 px-3 py-2 text-sm text-gray-500">
+                  You do not have permission to create orders.
+                </div>
+              )}
             </div>
           </section>
 
@@ -302,23 +313,29 @@ export default function OrdersPage() {
                       <label className="mb-1 block text-sm font-medium">
                         Order status
                       </label>
-                      <select
-                        className="w-full rounded-xl border px-3 py-2"
-                        value={order.status}
-                        onChange={(e) =>
-                          updateStatusMutation.mutate({
-                            orderId: order.id,
-                            status: e.target.value as OrderStatus,
-                          })
-                        }
-                        disabled={updateStatusMutation.isPending}
-                      >
-                        {ORDER_STATUSES.map((status) => (
-                          <option key={status} value={status}>
-                            {status}
-                          </option>
-                        ))}
-                      </select>
+                      {canDoAction(user, "orders.updateStatus") ? (
+                        <select
+                          className="w-full rounded-xl border px-3 py-2"
+                          value={order.status}
+                          onChange={(e) =>
+                            updateStatusMutation.mutate({
+                              orderId: order.id,
+                              status: e.target.value as OrderStatus,
+                            })
+                          }
+                          disabled={updateStatusMutation.isPending}
+                        >
+                          {ORDER_STATUSES.map((status) => (
+                            <option key={status} value={status}>
+                              {status}
+                            </option>
+                          ))}
+                        </select>
+                      ) : (
+                        <div className="rounded-xl border px-3 py-2 text-sm text-gray-600">
+                          {order.status}
+                        </div>
+                      )}
                     </div>
                   </div>
 

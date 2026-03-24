@@ -13,7 +13,8 @@ import {
   resolveServiceRequest,
 } from "@/lib/service-requests-api";
 import { getTables } from "@/lib/tables-api";
-
+import { useAuth } from "@/providers/auth-provider";
+import { canDoAction } from "@/lib/access";
 import type {
   ServiceRequest,
   ServiceRequestSourceType,
@@ -58,7 +59,7 @@ function getStatusClasses(status: ServiceRequestStatus) {
 export default function ServiceRequestsPage() {
   const router = useRouter();
   const queryClient = useQueryClient();
-
+  const { user } = useAuth();
   const [errorMessage, setErrorMessage] = useState("");
   const [tableSessionId, setTableSessionId] = useState("");
   const [requestType, setRequestType] =
@@ -172,7 +173,8 @@ export default function ServiceRequestsPage() {
 
     return (
       <div className="flex flex-wrap gap-2">
-        {request.status === "OPEN" ? (
+        {request.status === "OPEN" &&
+        canDoAction(user, "serviceRequests.acknowledge") ? (
           <button
             onClick={() => acknowledgeMutation.mutate(request.id)}
             disabled={busy}
@@ -182,7 +184,9 @@ export default function ServiceRequestsPage() {
           </button>
         ) : null}
 
-        {request.status !== "RESOLVED" && request.status !== "CANCELLED" ? (
+        {request.status !== "RESOLVED" &&
+        request.status !== "CANCELLED" &&
+        canDoAction(user, "serviceRequests.resolve") ? (
           <button
             onClick={() => resolveMutation.mutate(request.id)}
             disabled={busy}
@@ -194,7 +198,8 @@ export default function ServiceRequestsPage() {
 
         {request.status !== "ESCALATED" &&
         request.status !== "RESOLVED" &&
-        request.status !== "CANCELLED" ? (
+        request.status !== "CANCELLED" &&
+        canDoAction(user, "serviceRequests.escalate") ? (
           <button
             onClick={() => escalateMutation.mutate(request.id)}
             disabled={busy}
@@ -303,13 +308,19 @@ export default function ServiceRequestsPage() {
                 />
               </div>
 
-              <button
-                onClick={handleCreate}
-                disabled={createMutation.isPending}
-                className="w-full rounded-xl bg-black px-4 py-2 text-white disabled:opacity-60"
-              >
-                {createMutation.isPending ? "Creating..." : "Create request"}
-              </button>
+              {canDoAction(user, "serviceRequests.create") ? (
+                <button
+                  onClick={handleCreate}
+                  disabled={createMutation.isPending}
+                  className="w-full rounded-xl bg-black px-4 py-2 text-white disabled:opacity-60"
+                >
+                  {createMutation.isPending ? "Creating..." : "Create request"}
+                </button>
+              ) : (
+                <div className="rounded-xl bg-gray-50 px-3 py-2 text-sm text-gray-500">
+                  You do not have permission to create service requests.
+                </div>
+              )}
             </div>
           </section>
 
