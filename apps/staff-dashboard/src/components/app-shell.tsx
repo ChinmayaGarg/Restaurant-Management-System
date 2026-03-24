@@ -2,8 +2,10 @@
 
 import { SidebarNav } from "./sidebar-nav";
 import { NotificationBell } from "./notification-bell";
-import { useAuth } from "@/providers/auth-provider";
 import { DataRefreshBar } from "./data-refresh-bar";
+import { Button } from "@/components/ui/button";
+import { Card } from "@/components/ui/card";
+import { useAuth } from "@/providers/auth-provider";
 
 export function AppShell({ children }: { children: React.ReactNode }) {
   const { user, loading, logout } = useAuth();
@@ -11,39 +13,35 @@ export function AppShell({ children }: { children: React.ReactNode }) {
   if (loading) {
     return (
       <main className="min-h-screen bg-gray-100 p-6">
-        <div className="rounded-2xl bg-white p-6 shadow">Loading app...</div>
+        <Card>Loading app...</Card>
       </main>
     );
   }
 
+  const fullName = user ? `${user.firstName} ${user.lastName}` : "Staff User";
+
+  const rolesText = user?.roles.join(", ") ?? "No roles";
+
   return (
     <main className="min-h-screen bg-gray-100 p-6">
       <div className="mx-auto max-w-7xl space-y-6">
-        <header className="flex items-center justify-between rounded-2xl bg-white p-4 shadow">
+        <Card className="flex items-center justify-between p-4">
           <div>
-            <div className="font-semibold">
-              {user ? `${user.firstName} ${user.lastName}` : "Staff User"}
-            </div>
-            <div className="text-sm text-gray-500">
-              {user?.email} • {user?.roles.join(", ")}
-            </div>
-            <div className="text-xs text-gray-500">
-              Roles: {user?.roles.join(", ")}
-            </div>
+            <div className="font-semibold">{fullName}</div>
+            <div className="text-sm text-gray-500">{user?.email}</div>
+            <div className="text-xs text-gray-500">Roles: {rolesText}</div>
           </div>
 
           <div className="flex items-center gap-3">
             <NotificationBell />
-
-            <button
-              onClick={logout}
-              className="rounded-xl border px-4 py-2 text-sm"
-            >
+            <Button variant="outline" onClick={logout}>
               Logout
-            </button>
+            </Button>
           </div>
-        </header>
+        </Card>
+
         <DataRefreshBar />
+
         <div className="grid gap-6 xl:grid-cols-[260px_1fr]">
           <SidebarNav />
           <section className="min-w-0">{children}</section>
