@@ -3,6 +3,7 @@
 import { SidebarNav } from "./sidebar-nav";
 import { NotificationBell } from "./notification-bell";
 import { useAuth } from "@/providers/auth-provider";
+import { DataRefreshBar } from "./data-refresh-bar";
 
 export function AppShell({ children }: { children: React.ReactNode }) {
   const { user, loading, logout } = useAuth();
@@ -42,7 +43,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
             </button>
           </div>
         </header>
-
+        <DataRefreshBar />
         <div className="grid gap-6 xl:grid-cols-[260px_1fr]">
           <SidebarNav />
           <section className="min-w-0">{children}</section>
