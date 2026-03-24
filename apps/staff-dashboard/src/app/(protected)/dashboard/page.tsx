@@ -71,6 +71,9 @@ const navCards = [
   },
 ];
 
+import { PageHeader } from "@/components/page-header";
+import { Card } from "@/components/ui/card";
+
 export default function DashboardPage() {
   const { user } = useAuth();
 
@@ -160,12 +163,10 @@ export default function DashboardPage() {
 
   return (
     <div className="space-y-6">
-      <div className="rounded-2xl bg-white p-6 shadow">
-        <h1 className="text-2xl font-semibold">Dashboard</h1>
-        <p className="mt-2 text-sm text-gray-600">
-          Restaurant operations overview and quick navigation.
-        </p>
-      </div>
+      <PageHeader
+        title="Dashboard"
+        description="Restaurant operations overview and quick navigation."
+      />
 
       {loading ? (
         <div className="rounded-2xl bg-white p-6 shadow text-sm text-gray-600">
@@ -230,14 +231,12 @@ export default function DashboardPage() {
 
       <div className="grid gap-4 md:grid-cols-3 xl:grid-cols-6">
         {visibleCards.map((card) => (
-          <Link
-            key={card.href}
-            href={card.href}
-            className="rounded-2xl bg-white p-5 shadow block"
-          >
-            <h2 className="font-semibold">{card.title}</h2>
-            <p className="mt-2 text-sm text-gray-600">{card.description}</p>
-          </Link>
+          <Card key={card.href} className="p-5">
+            <Link href={card.href}>
+              <h2 className="font-semibold">{card.title}</h2>
+              <p className="mt-2 text-sm text-gray-600">{card.description}</p>
+            </Link>
+          </Card>
         ))}
       </div>
     </div>

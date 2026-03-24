@@ -15,20 +15,12 @@ import type { Order, OrderItem, OrderStatus } from "@/types/orders";
 
 const KITCHEN_STATUSES: OrderStatus[] = ["ACCEPTED", "PREPARING", "READY"];
 
-function getStatusClasses(status: OrderStatus) {
-  switch (status) {
-    case "PLACED":
-      return "bg-gray-100 text-gray-700";
-    case "ACCEPTED":
-      return "bg-blue-100 text-blue-700";
-    case "PREPARING":
-      return "bg-yellow-100 text-yellow-700";
-    case "READY":
-      return "bg-green-100 text-green-700";
-    default:
-      return "bg-gray-100 text-gray-700";
-  }
-}
+import { StatusBadge } from "@/components/ui/status-badge";
+import { useToast } from "@/providers/toast-provider";
+import { PageHeader } from "@/components/page-header";
+import { Card, CardHeader, CardContent } from "@/components/ui/card";
+import { Button } from "@/components/ui/button";
+import { EmptyState } from "@/components/ui/empty-state";
 
 export default function KitchenPage() {
   const router = useRouter();
@@ -115,7 +107,9 @@ export default function KitchenPage() {
           </div>
 
           {canDoAction(user, "kitchen.updateItemAvailability") ? (
-            <button
+            <Button
+              variant="outline"
+              size="sm"
               onClick={() =>
                 updateAvailabilityMutation.mutate({
                   itemId: item.menuItem.id,
@@ -123,10 +117,9 @@ export default function KitchenPage() {
                 })
               }
               disabled={busy}
-              className="rounded-xl border px-3 py-2 text-sm"
             >
               Mark unavailable
-            </button>
+            </Button>
           ) : null}
         </div>
       </div>
@@ -137,7 +130,7 @@ export default function KitchenPage() {
     const busy = updateStatusMutation.isPending;
 
     return (
-      <div key={order.id} className="rounded-2xl bg-white p-5 shadow">
+      <Card key={order.id}>
         <div className="flex flex-col gap-3 md:flex-row md:items-start md:justify-between">
           <div>
             <div className="flex items-center gap-3">
@@ -145,13 +138,20 @@ export default function KitchenPage() {
                 {order.tableSession.table.displayName} •{" "}
                 {order.tableSession.table.section.name}
               </h3>
-              <span
-                className={`rounded-full px-3 py-1 text-xs font-medium ${getStatusClasses(
-                  order.status,
-                )}`}
-              >
-                {order.status}
-              </span>
+              <StatusBadge
+                label={order.status}
+                tone={
+                  order.status === "PLACED"
+                    ? "gray"
+                    : order.status === "ACCEPTED"
+                      ? "blue"
+                      : order.status === "PREPARING"
+                        ? "yellow"
+                        : order.status === "READY"
+                          ? "green"
+                          : "gray"
+                }
+              />
             </div>
             <div className="mt-1 text-sm text-gray-500">
               Order ID: {order.id}
@@ -195,26 +195,17 @@ export default function KitchenPage() {
         </div>
 
         <div className="mt-4 space-y-2">{order.items.map(renderItem)}</div>
-      </div>
+      </Card>
     );
   }
 
   return (
     <main className="min-h-screen bg-gray-100 p-6">
       <div className="mx-auto max-w-7xl space-y-6">
-        <div className="flex items-center justify-between rounded-2xl bg-white p-6 shadow">
-          <div>
-            <h1 className="text-2xl font-semibold">Kitchen</h1>
-            <p className="mt-1 text-sm text-gray-600">
-              Manage kitchen queue, advance order prep, and control item
-              availability.
-            </p>
-          </div>
-
-          <Link href="/dashboard" className="rounded-xl border px-4 py-2">
-            Back to dashboard
-          </Link>
-        </div>
+        <PageHeader
+          title="Kitchen"
+          description="Manage kitchen queue, advance order prep, and control item availability."
+        />
 
         {errorMessage ? (
           <div className="rounded-2xl bg-red-50 p-4 text-red-600">
@@ -239,18 +230,21 @@ export default function KitchenPage() {
         <div className="grid gap-6 xl:grid-cols-2">
           {(["PLACED", "ACCEPTED", "PREPARING", "READY"] as const).map(
             (bucket) => (
-              <section key={bucket} className="space-y-3">
-                <h2 className="text-lg font-semibold">{bucket}</h2>
-                <div className="space-y-4">
-                  {groupedOrders[bucket].map(renderOrderCard)}
-                  {!queueQuery.isLoading &&
-                  groupedOrders[bucket].length === 0 ? (
-                    <div className="rounded-2xl bg-white p-5 text-sm text-gray-600 shadow">
-                      No {bucket.toLowerCase()} orders.
-                    </div>
-                  ) : null}
-                </div>
-              </section>
+              <Card key={bucket}>
+                <CardHeader title={bucket} />
+                <CardContent>
+                  <div className="space-y-4">
+                    {groupedOrders[bucket].map(renderOrderCard)}
+                    {!queueQuery.isLoading &&
+                    groupedOrders[bucket].length === 0 ? (
+                      <EmptyState
+                        title={`No ${bucket.toLowerCase()} orders`}
+                        description="Orders will appear here when available."
+                      />
+                    ) : null}
+                  </div>
+                </CardContent>
+              </Card>
             ),
           )}
         </div>

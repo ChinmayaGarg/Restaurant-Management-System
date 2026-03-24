@@ -163,16 +163,10 @@ export default function NotificationsPage() {
   return (
     <main className="min-h-screen bg-gray-100 p-6">
       <div className="mx-auto max-w-5xl space-y-6">
-        <div className="flex items-center justify-between rounded-2xl bg-white p-6 shadow">
-          <PageHeader
-            title="Notifications"
-            description="Live restaurant alerts and workflow events."
-          />
-
-          <Link href="/dashboard" className="rounded-xl border px-4 py-2">
-            Back to dashboard
-          </Link>
-        </div>
+        <PageHeader
+          title="Notifications"
+          description="Live restaurant alerts and workflow events."
+        />
 
         {errorMessage ? (
           <div className="rounded-2xl bg-red-50 p-4 text-red-600">

@@ -26,6 +26,9 @@ import { StatusBadge } from "@/components/ui/status-badge";
 import { useToast } from "@/providers/toast-provider";
 import { ConfirmDialog } from "@/components/confirm-dialog";
 import { PageHeader } from "@/components/page-header";
+import { Card, CardHeader, CardContent } from "@/components/ui/card";
+import { Button } from "@/components/ui/button";
+import { EmptyState } from "@/components/ui/empty-state";
 
 function getStatusClasses(status: TableStatus) {
   switch (status) {
@@ -192,169 +195,173 @@ export default function TablesPage() {
         ) : null}
 
         {Object.entries(groupedTables).map(([sectionName, tables]) => (
-          <section key={sectionName} className="space-y-3">
-            <h2 className="text-lg font-semibold">{sectionName}</h2>
+          <Card key={sectionName}>
+            <CardHeader title={sectionName} />
+            <CardContent>
+              <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
+                {tables.map((table) => {
+                  const openSession = table.sessions[0] ?? null;
+                  const busy =
+                    openSessionMutation.isPending ||
+                    closeSessionMutation.isPending ||
+                    updateStatusMutation.isPending;
 
-            <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
-              {tables.map((table) => {
-                const openSession = table.sessions[0] ?? null;
-                const busy =
-                  openSessionMutation.isPending ||
-                  closeSessionMutation.isPending ||
-                  updateStatusMutation.isPending;
-
-                return (
-                  <div
-                    key={table.id}
-                    className="rounded-2xl bg-white p-5 shadow"
-                  >
-                    <div className="flex items-start justify-between gap-3">
-                      <div>
-                        <div className="text-lg font-semibold">
-                          {table.displayName}
-                        </div>
-                        <div className="text-sm text-gray-500">
-                          {table.tableCode}
-                        </div>
-                        <div className="mt-1 text-sm text-gray-500">
-                          Capacity: {table.capacity}
-                        </div>
-                      </div>
-
-                      <StatusBadge
-                        label={table.status}
-                        tone={
-                          table.status === "AVAILABLE"
-                            ? "green"
-                            : table.status === "OCCUPIED"
-                              ? "blue"
-                              : table.status === "RESERVED"
-                                ? "yellow"
-                                : table.status === "CLEANING"
-                                  ? "orange"
-                                  : table.status === "OUT_OF_SERVICE"
-                                    ? "red"
-                                    : "gray"
-                        }
-                      />
-                    </div>
-
-                    <div className="mt-4">
-                      <label className="mb-1 block text-sm font-medium">
-                        Table status
-                      </label>
-                      {canDoAction(user, "tables.updateStatus") ? (
-                        <select
-                          className="w-full rounded-xl border px-3 py-2"
-                          value={table.status}
-                          onChange={(e) =>
-                            handleStatusChange(
-                              table.id,
-                              e.target.value as TableStatus,
-                            )
-                          }
-                          disabled={busy}
-                        >
-                          {TABLE_STATUSES.map((status) => (
-                            <option key={status} value={status}>
-                              {status}
-                            </option>
-                          ))}
-                        </select>
-                      ) : (
-                        <div className="rounded-xl border px-3 py-2 text-sm text-gray-600">
-                          {table.status}
-                        </div>
-                      )}
-                    </div>
-
-                    {openSession ? (
-                      <div className="mt-4 rounded-xl bg-gray-50 p-4">
-                        <div className="text-sm font-medium">Open session</div>
-                        <div className="mt-1 text-sm text-gray-600">
-                          Guests: {openSession.guestCount ?? "N/A"}
-                        </div>
-                        <div className="text-sm text-gray-600">
-                          Opened by: {openSession.openedByUser.firstName}{" "}
-                          {openSession.openedByUser.lastName}
-                        </div>
-                        <div className="text-sm text-gray-600">
-                          Opened at:{" "}
-                          {new Date(openSession.openedAt).toLocaleString()}
-                        </div>
-
-                        {canDoAction(user, "tables.closeSession") ? (
-                          <button
-                            onClick={() => setConfirmCloseTableId(table.id)}
-                            disabled={busy}
-                            className="mt-3 w-full rounded-xl border px-4 py-2"
-                          >
-                            Close session
-                          </button>
-                        ) : null}
-                      </div>
-                    ) : (
-                      <div className="mt-4 rounded-xl bg-gray-50 p-4">
-                        {openingTableId === table.id ? (
-                          <div className="space-y-3">
-                            <div>
-                              <label className="mb-1 block text-sm font-medium">
-                                Guest count
-                              </label>
-                              <input
-                                type="number"
-                                min={1}
-                                className="w-full rounded-xl border px-3 py-2"
-                                value={guestCountByTable[table.id] ?? ""}
-                                onChange={(e) =>
-                                  setGuestCountByTable((prev) => ({
-                                    ...prev,
-                                    [table.id]: e.target.value,
-                                  }))
-                                }
-                              />
-                            </div>
-
-                            <div className="flex gap-2">
-                              <button
-                                onClick={() => handleOpen(table.id)}
-                                disabled={busy}
-                                className="flex-1 rounded-xl bg-black px-4 py-2 text-white"
-                              >
-                                {openSessionMutation.isPending
-                                  ? "Opening..."
-                                  : "Confirm"}
-                              </button>
-
-                              <button
-                                onClick={() => setOpeningTableId(null)}
-                                disabled={busy}
-                                className="rounded-xl border px-4 py-2"
-                              >
-                                Cancel
-                              </button>
-                            </div>
+                  return (
+                    <div
+                      key={table.id}
+                      className="rounded-2xl bg-white p-5 shadow"
+                    >
+                      <div className="flex items-start justify-between gap-3">
+                        <div>
+                          <div className="text-lg font-semibold">
+                            {table.displayName}
                           </div>
-                        ) : canDoAction(user, "tables.openSession") ? (
-                          <button
-                            onClick={() => setOpeningTableId(table.id)}
-                            disabled={busy}
-                            className="w-full rounded-xl bg-black px-4 py-2 text-white"
-                          >
-                            Open session
-                          </button>
-                        ) : (
                           <div className="text-sm text-gray-500">
-                            You do not have access to open sessions.
+                            {table.tableCode}
+                          </div>
+                          <div className="mt-1 text-sm text-gray-500">
+                            Capacity: {table.capacity}
+                          </div>
+                        </div>
+
+                        <StatusBadge
+                          label={table.status}
+                          tone={
+                            table.status === "AVAILABLE"
+                              ? "green"
+                              : table.status === "OCCUPIED"
+                                ? "blue"
+                                : table.status === "RESERVED"
+                                  ? "yellow"
+                                  : table.status === "CLEANING"
+                                    ? "orange"
+                                    : table.status === "OUT_OF_SERVICE"
+                                      ? "red"
+                                      : "gray"
+                          }
+                        />
+                      </div>
+
+                      <div className="mt-4">
+                        <label className="mb-1 block text-sm font-medium">
+                          Table status
+                        </label>
+                        {canDoAction(user, "tables.updateStatus") ? (
+                          <select
+                            className="w-full rounded-xl border px-3 py-2"
+                            value={table.status}
+                            onChange={(e) =>
+                              handleStatusChange(
+                                table.id,
+                                e.target.value as TableStatus,
+                              )
+                            }
+                            disabled={busy}
+                          >
+                            {TABLE_STATUSES.map((status) => (
+                              <option key={status} value={status}>
+                                {status}
+                              </option>
+                            ))}
+                          </select>
+                        ) : (
+                          <div className="rounded-xl border px-3 py-2 text-sm text-gray-600">
+                            {table.status}
                           </div>
                         )}
                       </div>
-                    )}
-                  </div>
-                );
-              })}
-            </div>
-          </section>
+
+                      {openSession ? (
+                        <div className="mt-4 rounded-xl bg-gray-50 p-4">
+                          <div className="text-sm font-medium">
+                            Open session
+                          </div>
+                          <div className="mt-1 text-sm text-gray-600">
+                            Guests: {openSession.guestCount ?? "N/A"}
+                          </div>
+                          <div className="text-sm text-gray-600">
+                            Opened by: {openSession.openedByUser.firstName}{" "}
+                            {openSession.openedByUser.lastName}
+                          </div>
+                          <div className="text-sm text-gray-600">
+                            Opened at:{" "}
+                            {new Date(openSession.openedAt).toLocaleString()}
+                          </div>
+
+                          {canDoAction(user, "tables.closeSession") ? (
+                            <Button
+                              variant="outline"
+                              onClick={() => setConfirmCloseTableId(table.id)}
+                              disabled={busy}
+                              className="mt-3 w-full"
+                            >
+                              Close session
+                            </Button>
+                          ) : null}
+                        </div>
+                      ) : (
+                        <div className="mt-4 rounded-xl bg-gray-50 p-4">
+                          {openingTableId === table.id ? (
+                            <div className="space-y-3">
+                              <div>
+                                <label className="mb-1 block text-sm font-medium">
+                                  Guest count
+                                </label>
+                                <input
+                                  type="number"
+                                  min={1}
+                                  className="w-full rounded-xl border px-3 py-2"
+                                  value={guestCountByTable[table.id] ?? ""}
+                                  onChange={(e) =>
+                                    setGuestCountByTable((prev) => ({
+                                      ...prev,
+                                      [table.id]: e.target.value,
+                                    }))
+                                  }
+                                />
+                              </div>
+
+                              <div className="flex gap-2">
+                                <Button
+                                  onClick={() => handleOpen(table.id)}
+                                  disabled={busy}
+                                  className="flex-1"
+                                >
+                                  {openSessionMutation.isPending
+                                    ? "Opening..."
+                                    : "Confirm"}
+                                </Button>
+
+                                <Button
+                                  variant="outline"
+                                  onClick={() => setOpeningTableId(null)}
+                                  disabled={busy}
+                                >
+                                  Cancel
+                                </Button>
+                              </div>
+                            </div>
+                          ) : canDoAction(user, "tables.openSession") ? (
+                            <Button
+                              onClick={() => setOpeningTableId(table.id)}
+                              disabled={busy}
+                              className="w-full"
+                            >
+                              Open session
+                            </Button>
+                          ) : (
+                            <div className="text-sm text-gray-500">
+                              You do not have access to open sessions.
+                            </div>
+                          )}
+                        </div>
+                      )}
+                    </div>
+                  );
+                })}
+              </div>
+            </CardContent>
+          </Card>
         ))}
         <ConfirmDialog
           open={Boolean(confirmCloseTableId)}

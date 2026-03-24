@@ -6,7 +6,6 @@ import { useRouter } from "next/navigation";
 import { useMemo, useState } from "react";
 import { useAuth } from "@/providers/auth-provider";
 import { canDoAction } from "@/lib/access";
-import { Button } from "@/components/ui/button";
 import { closeBill, generateBill, getBill } from "@/lib/billing-api";
 import {
   getPaymentSummary,
@@ -21,6 +20,10 @@ import type { DiningTable } from "@/types/tables";
 import { useToast } from "@/providers/toast-provider";
 import { ConfirmDialog } from "@/components/confirm-dialog";
 import { PageHeader } from "@/components/page-header";
+import { Card, CardHeader, CardContent } from "@/components/ui/card";
+import { Button } from "@/components/ui/button";
+import { StatusBadge } from "@/components/ui/status-badge";
+import { EmptyState } from "@/components/ui/empty-state";
 
 function toMoney(value: string | number) {
   const number = typeof value === "string" ? Number(value) : value;
@@ -194,307 +197,325 @@ export default function BillingPage() {
         ) : null}
 
         <div className="grid gap-6 lg:grid-cols-[380px_1fr]">
-          <section className="space-y-6">
-            <div className="rounded-2xl bg-white p-6 shadow">
-              <h2 className="text-lg font-semibold">Generate bill</h2>
+          <div className="space-y-6">
+            <Card>
+              <CardHeader title="Generate bill" />
+              <CardContent>
+                <div className="space-y-4">
+                  <div>
+                    <label className="mb-1 block text-sm font-medium">
+                      Open table session
+                    </label>
+                    <select
+                      className="w-full rounded-xl border px-3 py-2"
+                      value={tableSessionId}
+                      onChange={(e) => setTableSessionId(e.target.value)}
+                    >
+                      <option value="">Select a table session</option>
+                      {openSessions.map((session) => (
+                        <option
+                          key={session.sessionId}
+                          value={session.sessionId}
+                        >
+                          {session.tableName} ({session.tableCode}) •{" "}
+                          {session.sectionName}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
 
-              <div className="mt-4 space-y-4">
-                <div>
-                  <label className="mb-1 block text-sm font-medium">
-                    Open table session
-                  </label>
-                  <select
+                  {canDoAction(user, "billing.generate") ? (
+                    <Button
+                      onClick={() =>
+                        generateBillMutation.mutate(tableSessionId)
+                      }
+                      disabled={
+                        !tableSessionId || generateBillMutation.isPending
+                      }
+                      className="w-full"
+                    >
+                      {generateBillMutation.isPending
+                        ? "Generating..."
+                        : "Generate bill"}
+                    </Button>
+                  ) : (
+                    <div className="rounded-xl bg-gray-50 px-3 py-2 text-sm text-gray-500">
+                      You do not have permission to generate bills.
+                    </div>
+                  )}
+                </div>
+              </CardContent>
+            </Card>
+
+            <Card>
+              <CardHeader title="Load bill" />
+              <CardContent>
+                <div className="space-y-4">
+                  <input
                     className="w-full rounded-xl border px-3 py-2"
-                    value={tableSessionId}
-                    onChange={(e) => setTableSessionId(e.target.value)}
-                  >
-                    <option value="">Select a table session</option>
-                    {openSessions.map((session) => (
-                      <option key={session.sessionId} value={session.sessionId}>
-                        {session.tableName} ({session.tableCode}) •{" "}
-                        {session.sectionName}
-                      </option>
-                    ))}
-                  </select>
+                    value={billId}
+                    onChange={(e) => setBillId(e.target.value)}
+                    placeholder="Paste bill ID"
+                  />
                 </div>
+              </CardContent>
+            </Card>
 
-                {canDoAction(user, "billing.generate") ? (
-                  <button
-                    onClick={() => generateBillMutation.mutate(tableSessionId)}
-                    disabled={!tableSessionId || generateBillMutation.isPending}
-                    className="w-full rounded-xl bg-black px-4 py-2 text-white disabled:opacity-60"
-                  >
-                    {generateBillMutation.isPending
-                      ? "Generating..."
-                      : "Generate bill"}
-                  </button>
-                ) : (
-                  <div className="rounded-xl bg-gray-50 px-3 py-2 text-sm text-gray-500">
-                    You do not have permission to generate bills.
-                  </div>
-                )}
-              </div>
-            </div>
+            <Card>
+              <CardHeader title="Record cash payment" />
+              <CardContent>
+                <div className="space-y-4">
+                  <input
+                    type="number"
+                    min="0.01"
+                    step="0.01"
+                    className="w-full rounded-xl border px-3 py-2"
+                    value={cashAmount}
+                    onChange={(e) => setCashAmount(e.target.value)}
+                    placeholder="Amount"
+                  />
+                  <input
+                    className="w-full rounded-xl border px-3 py-2"
+                    value={cashNote}
+                    onChange={(e) => setCashNote(e.target.value)}
+                    placeholder="Optional note"
+                  />
+                  {canDoAction(user, "payments.markCash") ? (
+                    <Button
+                      variant="outline"
+                      onClick={() => markCashMutation.mutate()}
+                      disabled={
+                        !billId || !cashAmount || markCashMutation.isPending
+                      }
+                      className="w-full"
+                    >
+                      {markCashMutation.isPending
+                        ? "Saving..."
+                        : "Mark cash payment"}
+                    </Button>
+                  ) : (
+                    <div className="rounded-xl bg-gray-50 px-3 py-2 text-sm text-gray-500">
+                      You do not have permission to record cash payments.
+                    </div>
+                  )}
+                </div>
+              </CardContent>
+            </Card>
 
-            <div className="rounded-2xl bg-white p-6 shadow">
-              <h2 className="text-lg font-semibold">Load bill</h2>
+            <Card>
+              <CardHeader title="Record card payment" />
+              <CardContent>
+                <div className="space-y-4">
+                  <input
+                    type="number"
+                    min="0.01"
+                    step="0.01"
+                    className="w-full rounded-xl border px-3 py-2"
+                    value={cardAmount}
+                    onChange={(e) => setCardAmount(e.target.value)}
+                    placeholder="Amount"
+                  />
+                  <input
+                    className="w-full rounded-xl border px-3 py-2"
+                    value={cardProvider}
+                    onChange={(e) => setCardProvider(e.target.value)}
+                    placeholder="Provider"
+                  />
+                  <input
+                    className="w-full rounded-xl border px-3 py-2"
+                    value={cardReference}
+                    onChange={(e) => setCardReference(e.target.value)}
+                    placeholder="Reference"
+                  />
+                  {canDoAction(user, "payments.markCard") ? (
+                    <Button
+                      variant="outline"
+                      onClick={() => markCardMutation.mutate()}
+                      disabled={
+                        !billId || !cardAmount || markCardMutation.isPending
+                      }
+                      className="w-full"
+                    >
+                      {markCardMutation.isPending
+                        ? "Saving..."
+                        : "Mark card payment"}
+                    </Button>
+                  ) : (
+                    <div className="rounded-xl bg-gray-50 px-3 py-2 text-sm text-gray-500">
+                      You do not have permission to record card payments.
+                    </div>
+                  )}
+                </div>
+              </CardContent>
+            </Card>
+          </div>
 
-              <div className="mt-4 space-y-4">
-                <input
-                  className="w-full rounded-xl border px-3 py-2"
-                  value={billId}
-                  onChange={(e) => setBillId(e.target.value)}
-                  placeholder="Paste bill ID"
-                />
-              </div>
-            </div>
-
-            <div className="rounded-2xl bg-white p-6 shadow">
-              <h2 className="text-lg font-semibold">Record cash payment</h2>
-
-              <div className="mt-4 space-y-4">
-                <input
-                  type="number"
-                  min="0.01"
-                  step="0.01"
-                  className="w-full rounded-xl border px-3 py-2"
-                  value={cashAmount}
-                  onChange={(e) => setCashAmount(e.target.value)}
-                  placeholder="Amount"
-                />
-                <input
-                  className="w-full rounded-xl border px-3 py-2"
-                  value={cashNote}
-                  onChange={(e) => setCashNote(e.target.value)}
-                  placeholder="Optional note"
-                />
-                {canDoAction(user, "payments.markCash") ? (
-                  <button
-                    onClick={() => markCashMutation.mutate()}
-                    disabled={
-                      !billId || !cashAmount || markCashMutation.isPending
-                    }
-                    className="w-full rounded-xl border px-4 py-2"
-                  >
-                    {markCashMutation.isPending
-                      ? "Saving..."
-                      : "Mark cash payment"}
-                  </button>
-                ) : (
-                  <div className="rounded-xl bg-gray-50 px-3 py-2 text-sm text-gray-500">
-                    You do not have permission to record cash payments.
-                  </div>
-                )}
-              </div>
-            </div>
-
-            <div className="rounded-2xl bg-white p-6 shadow">
-              <h2 className="text-lg font-semibold">Record card payment</h2>
-
-              <div className="mt-4 space-y-4">
-                <input
-                  type="number"
-                  min="0.01"
-                  step="0.01"
-                  className="w-full rounded-xl border px-3 py-2"
-                  value={cardAmount}
-                  onChange={(e) => setCardAmount(e.target.value)}
-                  placeholder="Amount"
-                />
-                <input
-                  className="w-full rounded-xl border px-3 py-2"
-                  value={cardProvider}
-                  onChange={(e) => setCardProvider(e.target.value)}
-                  placeholder="Provider"
-                />
-                <input
-                  className="w-full rounded-xl border px-3 py-2"
-                  value={cardReference}
-                  onChange={(e) => setCardReference(e.target.value)}
-                  placeholder="Reference"
-                />
-                {canDoAction(user, "payments.markCard") ? (
-                  <button
-                    onClick={() => markCardMutation.mutate()}
-                    disabled={
-                      !billId || !cardAmount || markCardMutation.isPending
-                    }
-                    className="w-full rounded-xl border px-4 py-2"
-                  >
-                    {markCardMutation.isPending
-                      ? "Saving..."
-                      : "Mark card payment"}
-                  </button>
-                ) : (
-                  <div className="rounded-xl bg-gray-50 px-3 py-2 text-sm text-gray-500">
-                    You do not have permission to record card payments.
-                  </div>
-                )}
-              </div>
-            </div>
-          </section>
-
-          <section className="space-y-6">
-            <div className="rounded-2xl bg-white p-6 shadow">
-              <div className="flex items-center justify-between gap-3">
-                <div>
-                  <h2 className="text-lg font-semibold">Bill details</h2>
-                  {bill ? (
-                    <p className="mt-1 text-sm text-gray-600">
-                      {bill.billNumber} • {bill.status}
+          <div className="space-y-6">
+            <Card>
+              <CardHeader
+                title="Bill details"
+                action={
+                  bill && canDoAction(user, "billing.close") ? (
+                    <Button
+                      onClick={() => setConfirmCloseOpen(true)}
+                      disabled={closeBillMutation.isPending}
+                      variant="outline"
+                    >
+                      Close bill
+                    </Button>
+                  ) : null
+                }
+              />
+              <CardContent>
+                {bill ? (
+                  <div className="mb-4">
+                    <p className="text-sm text-gray-600">
+                      {bill.billNumber} •{" "}
+                      <StatusBadge label={bill.status} tone="gray" />
                     </p>
-                  ) : null}
-                </div>
-
-                {bill && canDoAction(user, "billing.close") ? (
-                  <Button
-                    onClick={() => setConfirmCloseOpen(true)}
-                    disabled={closeBillMutation.isPending}
-                    variant="outline"
-                  >
-                    Close bill
-                  </Button>
+                  </div>
                 ) : null}
-              </div>
 
-              {!billId ? (
-                <div className="mt-4 text-sm text-gray-600">
-                  Generate or load a bill to view details.
-                </div>
-              ) : null}
+                {!billId ? (
+                  <EmptyState
+                    title="No bill loaded"
+                    description="Generate or load a bill to view details."
+                  />
+                ) : null}
 
-              {billQuery.isLoading ? (
-                <div className="mt-4 text-sm text-gray-600">
-                  Loading bill...
-                </div>
-              ) : null}
+                {billQuery.isLoading ? (
+                  <div className="text-sm text-gray-600">Loading bill...</div>
+                ) : null}
 
-              {bill ? (
-                <div className="mt-4 space-y-4">
-                  <div className="rounded-xl bg-gray-50 p-4">
-                    <div className="font-medium">
-                      {bill.tableSession.table.displayName} •{" "}
-                      {bill.tableSession.table.section.name}
-                    </div>
-                    <div className="text-sm text-gray-600">
-                      Table code: {bill.tableSession.table.tableCode}
-                    </div>
-                    <div className="text-sm text-gray-600">
-                      Generated at:{" "}
-                      {bill.generatedAt
-                        ? new Date(bill.generatedAt).toLocaleString()
-                        : "N/A"}
-                    </div>
-                  </div>
-
-                  <div className="space-y-2">
-                    {bill.items.map((item) => (
-                      <div
-                        key={item.id}
-                        className="flex items-center justify-between rounded-xl border p-3"
-                      >
-                        <div>
-                          <div className="font-medium">
-                            {item.nameSnapshot} × {item.quantity}
-                          </div>
-                          <div className="text-sm text-gray-500">
-                            Unit price: {toMoney(item.unitPrice)}
-                          </div>
-                        </div>
-                        <div className="font-medium">
-                          {toMoney(item.lineTotal)}
-                        </div>
+                {bill ? (
+                  <div className="space-y-4">
+                    <div className="rounded-xl bg-gray-50 p-4">
+                      <div className="font-medium">
+                        {bill.tableSession.table.displayName} •{" "}
+                        {bill.tableSession.table.section.name}
                       </div>
-                    ))}
-                  </div>
-
-                  <div className="rounded-xl bg-gray-50 p-4 text-sm space-y-2">
-                    <div className="flex justify-between">
-                      <span>Subtotal</span>
-                      <span>{toMoney(bill.subtotalAmount)}</span>
-                    </div>
-                    <div className="flex justify-between">
-                      <span>Discount</span>
-                      <span>{toMoney(bill.discountAmount)}</span>
-                    </div>
-                    <div className="flex justify-between">
-                      <span>Tax</span>
-                      <span>{toMoney(bill.taxAmount)}</span>
-                    </div>
-                    <div className="flex justify-between">
-                      <span>Service charge</span>
-                      <span>{toMoney(bill.serviceChargeAmount)}</span>
-                    </div>
-                    <div className="flex justify-between border-t pt-2 font-semibold">
-                      <span>Total</span>
-                      <span>{toMoney(bill.totalAmount)}</span>
-                    </div>
-                  </div>
-                </div>
-              ) : null}
-            </div>
-
-            <div className="rounded-2xl bg-white p-6 shadow">
-              <h2 className="text-lg font-semibold">Payment summary</h2>
-
-              {paymentSummaryQuery.isLoading ? (
-                <div className="mt-4 text-sm text-gray-600">
-                  Loading payment summary...
-                </div>
-              ) : null}
-
-              {paymentSummary ? (
-                <div className="mt-4 space-y-4">
-                  <div className="rounded-xl bg-gray-50 p-4 text-sm space-y-2">
-                    <div className="flex justify-between">
-                      <span>Total</span>
-                      <span>{toMoney(paymentSummary.totalAmount)}</span>
-                    </div>
-                    <div className="flex justify-between">
-                      <span>Paid</span>
-                      <span>{toMoney(paymentSummary.paidAmount)}</span>
-                    </div>
-                    <div className="flex justify-between font-semibold">
-                      <span>Balance</span>
-                      <span>{toMoney(paymentSummary.balanceAmount)}</span>
-                    </div>
-                  </div>
-
-                  <div className="space-y-2">
-                    {paymentSummary.payments.map((payment) => (
-                      <div key={payment.id} className="rounded-xl border p-3">
-                        <div className="flex items-center justify-between">
-                          <div className="font-medium">
-                            {payment.method} • {payment.status}
-                          </div>
-                          <div className="font-medium">
-                            {toMoney(payment.amount)}
-                          </div>
-                        </div>
-                        <div className="mt-1 text-sm text-gray-500">
-                          {payment.provider ?? "N/A"}{" "}
-                          {payment.providerReference
-                            ? `• ${payment.providerReference}`
-                            : ""}
-                        </div>
-                        <div className="text-xs text-gray-500">
-                          {payment.paidAt
-                            ? new Date(payment.paidAt).toLocaleString()
-                            : "Pending"}
-                        </div>
+                      <div className="text-sm text-gray-600">
+                        Table code: {bill.tableSession.table.tableCode}
                       </div>
-                    ))}
+                      <div className="text-sm text-gray-600">
+                        Generated at:{" "}
+                        {bill.generatedAt
+                          ? new Date(bill.generatedAt).toLocaleString()
+                          : "N/A"}
+                      </div>
+                    </div>
+
+                    <div className="space-y-2">
+                      {bill.items.map((item) => (
+                        <div
+                          key={item.id}
+                          className="flex items-center justify-between rounded-xl border p-3"
+                        >
+                          <div>
+                            <div className="font-medium">
+                              {item.nameSnapshot} × {item.quantity}
+                            </div>
+                            <div className="text-sm text-gray-500">
+                              Unit price: {toMoney(item.unitPrice)}
+                            </div>
+                          </div>
+                          <div className="font-medium">
+                            {toMoney(item.lineTotal)}
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+
+                    <div className="rounded-xl bg-gray-50 p-4 text-sm space-y-2">
+                      <div className="flex justify-between">
+                        <span>Subtotal</span>
+                        <span>{toMoney(bill.subtotalAmount)}</span>
+                      </div>
+                      <div className="flex justify-between">
+                        <span>Discount</span>
+                        <span>{toMoney(bill.discountAmount)}</span>
+                      </div>
+                      <div className="flex justify-between">
+                        <span>Tax</span>
+                        <span>{toMoney(bill.taxAmount)}</span>
+                      </div>
+                      <div className="flex justify-between">
+                        <span>Service charge</span>
+                        <span>{toMoney(bill.serviceChargeAmount)}</span>
+                      </div>
+                      <div className="flex justify-between border-t pt-2 font-semibold">
+                        <span>Total</span>
+                        <span>{toMoney(bill.totalAmount)}</span>
+                      </div>
+                    </div>
                   </div>
-                </div>
-              ) : (
-                !paymentSummaryQuery.isLoading && (
+                ) : null}
+              </CardContent>
+            </Card>
+
+            <Card>
+              <CardHeader title="Payment summary" />
+              <CardContent>
+                {paymentSummaryQuery.isLoading ? (
                   <div className="mt-4 text-sm text-gray-600">
-                    Load a bill to view payment summary.
+                    Loading payment summary...
                   </div>
-                )
-              )}
-            </div>
-          </section>
+                ) : null}
+
+                {paymentSummary ? (
+                  <div className="mt-4 space-y-4">
+                    <div className="rounded-xl bg-gray-50 p-4 text-sm space-y-2">
+                      <div className="flex justify-between">
+                        <span>Total</span>
+                        <span>{toMoney(paymentSummary.totalAmount)}</span>
+                      </div>
+                      <div className="flex justify-between">
+                        <span>Paid</span>
+                        <span>{toMoney(paymentSummary.paidAmount)}</span>
+                      </div>
+                      <div className="flex justify-between font-semibold">
+                        <span>Balance</span>
+                        <span>{toMoney(paymentSummary.balanceAmount)}</span>
+                      </div>
+                    </div>
+
+                    <div className="space-y-2">
+                      {paymentSummary.payments.map((payment) => (
+                        <div key={payment.id} className="rounded-xl border p-3">
+                          <div className="flex items-center justify-between">
+                            <div className="font-medium">
+                              {payment.method} • {payment.status}
+                            </div>
+                            <div className="font-medium">
+                              {toMoney(payment.amount)}
+                            </div>
+                          </div>
+                          <div className="mt-1 text-sm text-gray-500">
+                            {payment.provider ?? "N/A"}{" "}
+                            {payment.providerReference
+                              ? `• ${payment.providerReference}`
+                              : ""}
+                          </div>
+                          <div className="text-xs text-gray-500">
+                            {payment.paidAt
+                              ? new Date(payment.paidAt).toLocaleString()
+                              : "Pending"}
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                ) : (
+                  !paymentSummaryQuery.isLoading && (
+                    <EmptyState
+                      title="No payment summary"
+                      description="Load a bill to view payment summary."
+                    />
+                  )
+                )}
+              </CardContent>
+            </Card>
+          </div>
           <ConfirmDialog
             open={confirmCloseOpen}
             title="Close bill?"
