@@ -273,7 +273,7 @@ export default function OrdersPage() {
         </div>
       )}
 
-      <div className="grid gap-6 lg:grid-cols-[420px_1fr]">
+      <div className="grid gap-6 xl:grid-cols-[420px_1fr]">
         <Card>
           <CardHeader
             title="Create order"
