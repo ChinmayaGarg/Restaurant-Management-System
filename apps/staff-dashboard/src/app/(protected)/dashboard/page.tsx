@@ -12,43 +12,59 @@ import { getServiceRequests } from "@/lib/service-requests-api";
 import { getNotifications } from "@/lib/notifications-api";
 import { getKitchenQueue } from "@/lib/kitchen-api";
 
-function StatCard({
+import { PageHeader } from "@/components/page-header";
+import { Card, CardContent, CardHeader } from "@/components/ui/card";
+import { Button } from "@/components/ui/button";
+import { StatusBadge } from "@/components/ui/status-badge";
+import { EmptyState } from "@/components/ui/empty-state";
+
+function KpiCard({
   title,
   value,
   subtitle,
   href,
+  tone = "gray",
 }: {
   title: string;
   value: number;
   subtitle: string;
   href: string;
+  tone?: "gray" | "blue" | "green" | "yellow" | "red" | "purple" | "emerald";
 }) {
   return (
-    <Link href={href} className="rounded-2xl bg-white p-5 shadow block">
-      <div className="text-sm font-medium text-gray-500">{title}</div>
-      <div className="mt-2 text-3xl font-semibold">{value}</div>
-      <div className="mt-2 text-sm text-gray-600">{subtitle}</div>
+    <Link href={href}>
+      <Card className="p-5 transition hover:shadow-md">
+        <div className="flex items-start justify-between gap-3">
+          <div>
+            <div className="text-sm font-medium text-gray-500">{title}</div>
+            <div className="mt-2 text-3xl font-semibold">{value}</div>
+            <div className="mt-2 text-sm text-gray-600">{subtitle}</div>
+          </div>
+
+          <StatusBadge label={title} tone={tone} />
+        </div>
+      </Card>
     </Link>
   );
 }
 
-const navCards = [
+const quickLinks = [
   {
     href: "/tables",
     title: "Tables",
-    description: "View tables and manage sessions.",
+    description: "Open sessions, close sessions, and manage statuses.",
     key: "tables" as const,
   },
   {
     href: "/orders",
     title: "Orders",
-    description: "Create and manage orders.",
+    description: "Create and manage dine-in orders.",
     key: "orders" as const,
   },
   {
     href: "/service-requests",
     title: "Service Requests",
-    description: "Manage table-side requests.",
+    description: "Track and respond to guest requests.",
     key: "serviceRequests" as const,
   },
   {
@@ -60,19 +76,16 @@ const navCards = [
   {
     href: "/notifications",
     title: "Notifications",
-    description: "View alerts and live workflow events.",
+    description: "See live restaurant workflow events.",
     key: "notifications" as const,
   },
   {
     href: "/kitchen",
     title: "Kitchen",
-    description: "Manage the kitchen queue.",
+    description: "Manage kitchen queue and item availability.",
     key: "kitchen" as const,
   },
 ];
-
-import { PageHeader } from "@/components/page-header";
-import { Card } from "@/components/ui/card";
 
 export default function DashboardPage() {
   const { user } = useAuth();
@@ -102,9 +115,12 @@ export default function DashboardPage() {
     queryFn: getKitchenQueue,
   });
 
-  const visibleCards = navCards.filter((card) =>
-    canAccessNavKey(user, card.key),
-  );
+  const loading =
+    tablesQuery.isLoading ||
+    ordersQuery.isLoading ||
+    serviceRequestsQuery.isLoading ||
+    notificationsQuery.isLoading ||
+    kitchenQueueQuery.isLoading;
 
   const summary = useMemo(() => {
     const tables = tablesQuery.data ?? [];
@@ -113,38 +129,54 @@ export default function DashboardPage() {
     const notifications = notificationsQuery.data ?? [];
     const kitchenQueue = kitchenQueueQuery.data ?? [];
 
+    const totalTables = tables.length;
     const openSessions = tables.filter(
       (table) => table.sessions.length > 0,
     ).length;
     const availableTables = tables.filter(
       (table) => table.status === "AVAILABLE",
     ).length;
+    const occupiedTables = tables.filter(
+      (table) => table.status === "OCCUPIED",
+    ).length;
 
     const activeOrders = orders.filter((order) =>
       ["PLACED", "ACCEPTED", "PREPARING", "READY"].includes(order.status),
     ).length;
 
-    const unresolvedRequests = serviceRequests.filter(
-      (request) => !["RESOLVED", "CANCELLED"].includes(request.status),
+    const readyOrders = orders.filter(
+      (order) => order.status === "READY",
+    ).length;
+
+    const openRequests = serviceRequests.filter((request) =>
+      ["OPEN", "ACKNOWLEDGED", "ESCALATED"].includes(request.status),
+    ).length;
+
+    const escalatedRequests = serviceRequests.filter(
+      (request) => request.status === "ESCALATED",
     ).length;
 
     const unreadNotifications = notifications.filter(
       (notification) => !notification.isRead,
     ).length;
 
-    const readyOrders = kitchenQueue.filter(
-      (order) => order.status === "READY",
+    const kitchenQueueCount = kitchenQueue.length;
+    const kitchenPreparing = kitchenQueue.filter(
+      (order) => order.status === "PREPARING",
     ).length;
 
     return {
-      totalTables: tables.length,
+      totalTables,
       openSessions,
       availableTables,
+      occupiedTables,
       activeOrders,
-      unresolvedRequests,
-      unreadNotifications,
-      kitchenQueueCount: kitchenQueue.length,
       readyOrders,
+      openRequests,
+      escalatedRequests,
+      unreadNotifications,
+      kitchenQueueCount,
+      kitchenPreparing,
     };
   }, [
     tablesQuery.data,
@@ -154,91 +186,218 @@ export default function DashboardPage() {
     kitchenQueueQuery.data,
   ]);
 
-  const loading =
-    tablesQuery.isLoading ||
-    ordersQuery.isLoading ||
-    serviceRequestsQuery.isLoading ||
-    notificationsQuery.isLoading ||
-    kitchenQueueQuery.isLoading;
+  const visibleQuickLinks = quickLinks.filter((item) =>
+    canAccessNavKey(user, item.key),
+  );
+
+  const attentionItems = useMemo(() => {
+    const items: Array<{
+      title: string;
+      description: string;
+      href: string;
+      tone: "gray" | "blue" | "green" | "yellow" | "red" | "purple" | "emerald";
+    }> = [];
+
+    if (
+      canAccessNavKey(user, "notifications") &&
+      summary.unreadNotifications > 0
+    ) {
+      items.push({
+        title: `${summary.unreadNotifications} unread notification${
+          summary.unreadNotifications === 1 ? "" : "s"
+        }`,
+        description: "New alerts need to be reviewed.",
+        href: "/notifications",
+        tone: "red",
+      });
+    }
+
+    if (
+      canAccessNavKey(user, "serviceRequests") &&
+      summary.escalatedRequests > 0
+    ) {
+      items.push({
+        title: `${summary.escalatedRequests} escalated request${
+          summary.escalatedRequests === 1 ? "" : "s"
+        }`,
+        description: "High-priority service requests need attention.",
+        href: "/service-requests",
+        tone: "red",
+      });
+    }
+
+    if (canAccessNavKey(user, "orders") && summary.readyOrders > 0) {
+      items.push({
+        title: `${summary.readyOrders} ready order${
+          summary.readyOrders === 1 ? "" : "s"
+        }`,
+        description: "Orders are ready for service or pickup.",
+        href: "/orders",
+        tone: "green",
+      });
+    }
+
+    if (canAccessNavKey(user, "kitchen") && summary.kitchenPreparing > 0) {
+      items.push({
+        title: `${summary.kitchenPreparing} order${
+          summary.kitchenPreparing === 1 ? "" : "s"
+        } preparing`,
+        description: "Kitchen workflow is currently active.",
+        href: "/kitchen",
+        tone: "yellow",
+      });
+    }
+
+    if (canAccessNavKey(user, "tables") && summary.availableTables > 0) {
+      items.push({
+        title: `${summary.availableTables} available table${
+          summary.availableTables === 1 ? "" : "s"
+        }`,
+        description: "Tables are ready to seat new guests.",
+        href: "/tables",
+        tone: "blue",
+      });
+    }
+
+    return items;
+  }, [summary, user]);
 
   return (
-    <div className="space-y-6">
+    <main className="space-y-6">
       <PageHeader
         title="Dashboard"
         description="Restaurant operations overview and quick navigation."
       />
 
-      {loading ? (
-        <div className="rounded-2xl bg-white p-6 shadow text-sm text-gray-600">
-          Loading dashboard summary...
-        </div>
-      ) : null}
+      {loading ? <Card>Loading dashboard summary...</Card> : null}
 
       <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
         {canAccessNavKey(user, "tables") ? (
-          <StatCard
-            title="Tables"
-            value={summary.openSessions}
-            subtitle={`${summary.availableTables} available out of ${summary.totalTables}`}
-            href="/tables"
-          />
+          <>
+            <KpiCard
+              title="Open Sessions"
+              value={summary.openSessions}
+              subtitle={`${summary.availableTables} available out of ${summary.totalTables} tables`}
+              href="/tables"
+              tone="blue"
+            />
+            <KpiCard
+              title="Occupied Tables"
+              value={summary.occupiedTables}
+              subtitle="Tables currently in use"
+              href="/tables"
+              tone="yellow"
+            />
+          </>
         ) : null}
 
         {canAccessNavKey(user, "orders") ? (
-          <StatCard
+          <KpiCard
             title="Active Orders"
             value={summary.activeOrders}
             subtitle="Placed, accepted, preparing, or ready"
             href="/orders"
+            tone="purple"
           />
         ) : null}
 
         {canAccessNavKey(user, "serviceRequests") ? (
-          <StatCard
+          <KpiCard
             title="Open Requests"
-            value={summary.unresolvedRequests}
-            subtitle="Requests still needing attention"
+            value={summary.openRequests}
+            subtitle="Service requests still needing attention"
             href="/service-requests"
+            tone="red"
           />
         ) : null}
 
         {canAccessNavKey(user, "notifications") ? (
-          <StatCard
-            title="Unread Notifications"
+          <KpiCard
+            title="Unread Alerts"
             value={summary.unreadNotifications}
-            subtitle="Realtime alerts not yet read"
+            subtitle="Notifications not yet read"
             href="/notifications"
+            tone="red"
           />
         ) : null}
 
         {canAccessNavKey(user, "kitchen") ? (
-          <>
-            <StatCard
-              title="Kitchen Queue"
-              value={summary.kitchenQueueCount}
-              subtitle="Orders currently in the kitchen workflow"
-              href="/kitchen"
-            />
-            <StatCard
-              title="Ready Orders"
-              value={summary.readyOrders}
-              subtitle="Orders ready for pickup or service"
-              href="/kitchen"
-            />
-          </>
+          <KpiCard
+            title="Kitchen Queue"
+            value={summary.kitchenQueueCount}
+            subtitle="Orders currently in kitchen workflow"
+            href="/kitchen"
+            tone="green"
+          />
         ) : null}
       </div>
 
-      <div className="grid gap-4 md:grid-cols-3 xl:grid-cols-6">
-        {visibleCards.map((card) => (
-          <Card key={card.href} className="p-5">
-            <Link href={card.href}>
-              <h2 className="font-semibold">{card.title}</h2>
-              <p className="mt-2 text-sm text-gray-600">{card.description}</p>
-            </Link>
-          </Card>
-        ))}
+      <div className="grid gap-6 xl:grid-cols-[1.1fr_0.9fr]">
+        <Card>
+          <CardHeader
+            title="Attention needed"
+            description="Items that may need action soon."
+          />
+
+          <CardContent className="space-y-3">
+            {attentionItems.length === 0 ? (
+              <EmptyState
+                title="Everything looks good"
+                description="No urgent workflow items need attention right now."
+              />
+            ) : (
+              attentionItems.map((item) => (
+                <Card key={item.title} className="border p-4 shadow-none">
+                  <div className="flex items-start justify-between gap-4">
+                    <div>
+                      <div className="flex items-center gap-2">
+                        <div className="font-medium">{item.title}</div>
+                        <StatusBadge label="Attention" tone={item.tone} />
+                      </div>
+                      <div className="mt-1 text-sm text-gray-600">
+                        {item.description}
+                      </div>
+                    </div>
+
+                    <Link href={item.href}>
+                      <Button variant="outline" size="sm">
+                        Open
+                      </Button>
+                    </Link>
+                  </div>
+                </Card>
+              ))
+            )}
+          </CardContent>
+        </Card>
+
+        <Card>
+          <CardHeader
+            title="Quick navigation"
+            description="Jump into the areas you use most."
+          />
+
+          <CardContent className="space-y-3">
+            {visibleQuickLinks.length === 0 ? (
+              <EmptyState
+                title="No sections available"
+                description="Your current role does not have dashboard sections assigned."
+              />
+            ) : (
+              visibleQuickLinks.map((card) => (
+                <Link key={card.href} href={card.href}>
+                  <Card className="border p-4 shadow-none transition hover:shadow-sm">
+                    <div className="font-medium">{card.title}</div>
+                    <div className="mt-1 text-sm text-gray-600">
+                      {card.description}
+                    </div>
+                  </Card>
+                </Link>
+              ))
+            )}
+          </CardContent>
+        </Card>
       </div>
-    </div>
+    </main>
   );
 }
