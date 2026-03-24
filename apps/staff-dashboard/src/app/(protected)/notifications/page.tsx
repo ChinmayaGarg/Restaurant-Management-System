@@ -1,26 +1,75 @@
 "use client";
 
-import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useEffect, useMemo, useState } from "react";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 
-import { PageHeader } from "@/components/page-header";
-import { Button } from "@/components/ui/button";
-import { Card } from "@/components/ui/card";
-import { EmptyState } from "@/components/ui/empty-state";
-import { StatusBadge } from "@/components/ui/status-badge";
-import { canDoAction } from "@/lib/access";
 import {
   getNotifications,
   markNotificationRead,
 } from "@/lib/notifications-api";
+import { canDoAction } from "@/lib/access";
 import { useAuth } from "@/providers/auth-provider";
 import { useRealtime } from "@/providers/realtime-provider";
+import { useToast } from "@/providers/toast-provider";
+
 import type { NotificationItem } from "@/types/notifications";
+
+import { PageHeader } from "@/components/page-header";
+import { Card, CardContent, CardHeader } from "@/components/ui/card";
+import { Button } from "@/components/ui/button";
+import { StatusBadge } from "@/components/ui/status-badge";
+import { EmptyState } from "@/components/ui/empty-state";
+
+function getNotificationTone(type: string) {
+  switch (type) {
+    case "SERVICE_REQUEST_CREATED":
+      return "blue";
+    case "SERVICE_REQUEST_ESCALATED":
+      return "red";
+    case "ORDER_READY":
+      return "green";
+    case "BILL_GENERATED":
+      return "purple";
+    case "PAYMENT_RECORDED":
+      return "emerald";
+    case "BILL_PAID":
+      return "green";
+    case "MENU_ITEM_UNAVAILABLE":
+      return "orange";
+    case "MENU_ITEM_AVAILABLE":
+      return "green";
+    default:
+      return "gray";
+  }
+}
+
+function SummaryCard({
+  label,
+  value,
+  sublabel,
+}: {
+  label: string;
+  value: number;
+  sublabel: string;
+}) {
+  return (
+    <Card className="p-5">
+      <div className="text-sm font-medium text-gray-500">{label}</div>
+      <div className="mt-2 text-3xl font-semibold">{value}</div>
+      <div className="mt-2 text-sm text-gray-600">{sublabel}</div>
+    </Card>
+  );
+}
 
 export default function NotificationsPage() {
   const queryClient = useQueryClient();
   const { user } = useAuth();
-  const { latestNotification, latestReadEvent } = useRealtime();
+  const { showToast } = useToast();
+  const {
+    latestNotification,
+    latestReadEvent,
+    status: realtimeStatus,
+  } = useRealtime();
 
   const [errorMessage, setErrorMessage] = useState("");
 
@@ -71,13 +120,26 @@ export default function NotificationsPage() {
             item.id === updatedNotification.id ? updatedNotification : item,
           ),
       );
+
+      showToast({
+        type: "success",
+        title: "Notification marked as read",
+        message: "The notification was updated successfully.",
+      });
+
+      await queryClient.invalidateQueries({ queryKey: ["dashboard"] });
     },
     onError: (error) => {
-      setErrorMessage(
+      const message =
         error instanceof Error
           ? error.message
-          : "Failed to mark notification as read",
-      );
+          : "Failed to mark notification as read";
+      setErrorMessage(message);
+      showToast({
+        type: "error",
+        title: "Could not update notification",
+        message,
+      });
     },
   });
 
@@ -89,67 +151,130 @@ export default function NotificationsPage() {
     );
   }, [notificationsQuery.data]);
 
+  const summary = useMemo(() => {
+    return {
+      total: notifications.length,
+      unread: notifications.filter((item) => !item.isRead).length,
+      read: notifications.filter((item) => item.isRead).length,
+      serviceRequestAlerts: notifications.filter((item) =>
+        ["SERVICE_REQUEST_CREATED", "SERVICE_REQUEST_ESCALATED"].includes(
+          item.type,
+        ),
+      ).length,
+      orderAlerts: notifications.filter((item) =>
+        [
+          "ORDER_READY",
+          "BILL_GENERATED",
+          "PAYMENT_RECORDED",
+          "BILL_PAID",
+        ].includes(item.type),
+      ).length,
+    };
+  }, [notifications]);
+
   return (
-    <main className="min-h-screen bg-gray-100 p-6">
-      <div className="mx-auto max-w-5xl space-y-6">
-        <PageHeader
-          title="Notifications"
-          description="Live restaurant alerts and workflow events."
+    <main className="space-y-6">
+      <PageHeader
+        title="Notifications"
+        description="Live restaurant alerts and workflow events."
+      />
+
+      {errorMessage ? (
+        <Card className="bg-red-50 text-red-600">{errorMessage}</Card>
+      ) : null}
+
+      {notificationsQuery.isLoading ? (
+        <Card>Loading notifications...</Card>
+      ) : null}
+
+      {notificationsQuery.isError ? (
+        <Card className="bg-red-50 text-red-600">
+          {notificationsQuery.error instanceof Error
+            ? notificationsQuery.error.message
+            : "Failed to load notifications"}
+        </Card>
+      ) : null}
+
+      {!notificationsQuery.isLoading && (
+        <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-5">
+          <SummaryCard
+            label="Total"
+            value={summary.total}
+            sublabel="All notifications currently loaded"
+          />
+          <SummaryCard
+            label="Unread"
+            value={summary.unread}
+            sublabel="Needs your attention"
+          />
+          <SummaryCard
+            label="Read"
+            value={summary.read}
+            sublabel="Already acknowledged"
+          />
+          <SummaryCard
+            label="Service Alerts"
+            value={summary.serviceRequestAlerts}
+            sublabel="Request-related notifications"
+          />
+          <SummaryCard
+            label="Order & Billing Alerts"
+            value={summary.orderAlerts}
+            sublabel="Kitchen, billing, and payment events"
+          />
+        </div>
+      )}
+
+      <Card>
+        <CardHeader
+          title="Notification stream"
+          description={`Realtime status: ${realtimeStatus}`}
+          action={
+            <StatusBadge
+              label={realtimeStatus}
+              tone={
+                realtimeStatus === "connected"
+                  ? "green"
+                  : realtimeStatus === "connecting"
+                    ? "yellow"
+                    : realtimeStatus === "error"
+                      ? "red"
+                      : "gray"
+              }
+            />
+          }
         />
 
-        {errorMessage ? (
-          <div className="rounded-2xl bg-red-50 p-4 text-red-600">
-            {errorMessage}
-          </div>
-        ) : null}
+        <CardContent className="space-y-4">
+          {!notificationsQuery.isLoading && notifications.length === 0 ? (
+            <EmptyState
+              title="No notifications yet"
+              description="New alerts and workflow events will appear here."
+            />
+          ) : null}
 
-        {notificationsQuery.isLoading ? (
-          <div className="rounded-2xl bg-white p-6 shadow">
-            Loading notifications...
-          </div>
-        ) : null}
-
-        {notificationsQuery.isError ? (
-          <div className="rounded-2xl bg-red-50 p-6 text-red-600 shadow">
-            {notificationsQuery.error instanceof Error
-              ? notificationsQuery.error.message
-              : "Failed to load notifications"}
-          </div>
-        ) : null}
-
-        <div className="space-y-4">
           {notifications.map((notification) => (
             <Card
               key={notification.id}
-              className={notification.isRead ? "opacity-80" : ""}
+              className={`border p-4 shadow-none ${
+                notification.isRead ? "opacity-80" : ""
+              }`}
             >
               <div className="flex flex-col gap-3 md:flex-row md:items-start md:justify-between">
                 <div className="space-y-2">
                   <div className="flex items-center gap-3">
-                    <h2 className="font-semibold">{notification.title}</h2>
+                    <div className="font-semibold">{notification.title}</div>
 
                     <StatusBadge
                       label={notification.type}
-                      tone={
-                        notification.type === "SERVICE_REQUEST_CREATED"
-                          ? "blue"
-                          : notification.type === "SERVICE_REQUEST_ESCALATED"
-                            ? "red"
-                            : notification.type === "ORDER_READY"
-                              ? "green"
-                              : notification.type === "BILL_GENERATED"
-                                ? "purple"
-                                : notification.type === "PAYMENT_RECORDED"
-                                  ? "emerald"
-                                  : notification.type === "BILL_PAID"
-                                    ? "green"
-                                    : "gray"
-                      }
+                      tone={getNotificationTone(notification.type)}
                     />
 
                     {!notification.isRead ? (
                       <StatusBadge label="Unread" tone="gray" />
-                    ) : null}
+                    ) : (
+                      <StatusBadge label="Read" tone="gray" />
+                    )}
                   </div>
 
                   <p className="text-sm text-gray-700">
@@ -165,6 +290,16 @@ export default function NotificationsPage() {
                       Read: {new Date(notification.readAt).toLocaleString()}
                     </div>
                   ) : null}
+
+                  {notification.targetUserId ? (
+                    <div className="text-xs text-gray-500">
+                      Targeted notification
+                    </div>
+                  ) : (
+                    <div className="text-xs text-gray-500">
+                      Branch-wide notification
+                    </div>
+                  )}
                 </div>
 
                 {!notification.isRead &&
@@ -180,15 +315,8 @@ export default function NotificationsPage() {
               </div>
             </Card>
           ))}
-
-          {!notificationsQuery.isLoading && notifications.length === 0 ? (
-            <EmptyState
-              title="No notifications yet"
-              description="New alerts and workflow events will appear here."
-            />
-          ) : null}
-        </div>
-      </div>
+        </CardContent>
+      </Card>
     </main>
   );
 }
