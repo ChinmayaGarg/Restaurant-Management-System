@@ -1,12 +1,10 @@
 "use client";
 
-import Link from "next/link";
-import { useEffect, useMemo, useState } from "react";
-import { useRouter } from "next/navigation";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import Link from "next/link";
+import { useRouter } from "next/navigation";
+import { useMemo, useState } from "react";
 
-import { getToken } from "@/lib/auth";
-import { getTables } from "@/lib/tables-api";
 import {
   acknowledgeServiceRequest,
   createServiceRequest,
@@ -14,14 +12,15 @@ import {
   getServiceRequests,
   resolveServiceRequest,
 } from "@/lib/service-requests-api";
+import { getTables } from "@/lib/tables-api";
 
-import type { DiningTable } from "@/types/tables";
 import type {
   ServiceRequest,
   ServiceRequestSourceType,
   ServiceRequestStatus,
   ServiceRequestType,
 } from "@/types/service-requests";
+import type { DiningTable } from "@/types/tables";
 
 const REQUEST_TYPES: ServiceRequestType[] = [
   "CALL_SERVER",
@@ -67,13 +66,6 @@ export default function ServiceRequestsPage() {
   const [sourceType, setSourceType] =
     useState<ServiceRequestSourceType>("STAFF");
   const [sourceDeviceId, setSourceDeviceId] = useState("");
-
-  useEffect(() => {
-    const token = getToken();
-    if (!token) {
-      router.replace("/login");
-    }
-  }, [router]);
 
   const requestsQuery = useQuery({
     queryKey: ["service-requests"],

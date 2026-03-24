@@ -1,18 +1,17 @@
 "use client";
 
-import Link from "next/link";
-import { useEffect, useMemo, useState } from "react";
-import { useRouter } from "next/navigation";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import Link from "next/link";
+import { useRouter } from "next/navigation";
+import { useMemo, useState } from "react";
 
-import { getToken } from "@/lib/auth";
 import { getMenu } from "@/lib/menu-api";
 import { createOrder, getOrders, updateOrderStatus } from "@/lib/orders-api";
 import { getTables } from "@/lib/tables-api";
 
 import type { MenuCategory, MenuItem } from "@/types/menu";
-import type { DiningTable } from "@/types/tables";
 import type { OrderSourceType, OrderStatus } from "@/types/orders";
+import type { DiningTable } from "@/types/tables";
 
 const ORDER_STATUSES: OrderStatus[] = [
   "PLACED",
@@ -35,13 +34,6 @@ export default function OrdersPage() {
   const [specialInstructions, setSpecialInstructions] = useState("");
   const [notes, setNotes] = useState("");
   const [sourceType, setSourceType] = useState<OrderSourceType>("STAFF");
-
-  useEffect(() => {
-    const token = getToken();
-    if (!token) {
-      router.replace("/login");
-    }
-  }, [router]);
 
   const ordersQuery = useQuery({
     queryKey: ["orders"],

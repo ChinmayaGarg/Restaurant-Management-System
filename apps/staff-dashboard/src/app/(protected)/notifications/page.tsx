@@ -1,16 +1,16 @@
 "use client";
 
-import Link from "next/link";
-import { useCallback, useEffect, useMemo, useState } from "react";
-import { useRouter } from "next/navigation";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import Link from "next/link";
+import { useRouter } from "next/navigation";
+import { useCallback, useMemo, useState } from "react";
 
+import { useNotificationsSocket } from "@/hooks/use-notifications-socket";
 import { getToken } from "@/lib/auth";
 import {
   getNotifications,
   markNotificationRead,
 } from "@/lib/notifications-api";
-import { useNotificationsSocket } from "@/hooks/use-notifications-socket";
 import type {
   NotificationItem,
   NotificationReadEvent,
@@ -43,13 +43,6 @@ export default function NotificationsPage() {
   const [liveNotifications, setLiveNotifications] = useState<
     NotificationItem[]
   >([]);
-
-  useEffect(() => {
-    const token = getToken();
-    if (!token) {
-      router.replace("/login");
-    }
-  }, [router]);
 
   const notificationsQuery = useQuery({
     queryKey: ["notifications"],

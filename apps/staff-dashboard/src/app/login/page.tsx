@@ -1,9 +1,9 @@
 "use client";
 
-import { FormEvent, useState } from "react";
+import { FormEvent, useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { login } from "@/lib/api";
-import { setToken } from "@/lib/auth";
+import { getToken, setToken } from "@/lib/auth";
 
 export default function LoginPage() {
   const router = useRouter();
@@ -12,6 +12,12 @@ export default function LoginPage() {
   const [password, setPassword] = useState("Password@123");
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
+
+  useEffect(() => {
+    if (getToken()) {
+      router.replace("/dashboard");
+    }
+  }, [router]);
 
   async function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();

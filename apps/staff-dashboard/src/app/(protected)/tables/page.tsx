@@ -49,13 +49,6 @@ export default function TablesPage() {
     Record<string, string>
   >({});
 
-  useEffect(() => {
-    const token = getToken();
-    if (!token) {
-      router.replace("/login");
-    }
-  }, [router]);
-
   const tablesQuery = useQuery({
     queryKey: ["tables"],
     queryFn: getTables,

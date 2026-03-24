@@ -1,21 +1,20 @@
 "use client";
 
-import Link from "next/link";
-import { useEffect, useMemo, useState } from "react";
-import { useRouter } from "next/navigation";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import Link from "next/link";
+import { useRouter } from "next/navigation";
+import { useMemo, useState } from "react";
 
-import { getToken } from "@/lib/auth";
-import { getTables } from "@/lib/tables-api";
 import { closeBill, generateBill, getBill } from "@/lib/billing-api";
 import {
   getPaymentSummary,
   markCardPayment,
   markCashPayment,
 } from "@/lib/payments-api";
+import { getTables } from "@/lib/tables-api";
 
-import type { DiningTable } from "@/types/tables";
 import type { Bill, PaymentSummary } from "@/types/billing";
+import type { DiningTable } from "@/types/tables";
 
 function toMoney(value: string | number) {
   const number = typeof value === "string" ? Number(value) : value;
@@ -34,13 +33,6 @@ export default function BillingPage() {
   const [cardAmount, setCardAmount] = useState("");
   const [cardProvider, setCardProvider] = useState("TERMINAL");
   const [cardReference, setCardReference] = useState("");
-
-  useEffect(() => {
-    const token = getToken();
-    if (!token) {
-      router.replace("/login");
-    }
-  }, [router]);
 
   const tablesQuery = useQuery({
     queryKey: ["tables"],
