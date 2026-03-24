@@ -1,6 +1,7 @@
 "use client";
 
 import { SidebarNav } from "./sidebar-nav";
+import { NotificationBell } from "./notification-bell";
 import { useAuth } from "@/providers/auth-provider";
 
 export function AppShell({ children }: { children: React.ReactNode }) {
@@ -27,12 +28,16 @@ export function AppShell({ children }: { children: React.ReactNode }) {
             </div>
           </div>
 
-          <button
-            onClick={logout}
-            className="rounded-xl border px-4 py-2 text-sm"
-          >
-            Logout
-          </button>
+          <div className="flex items-center gap-3">
+            <NotificationBell />
+
+            <button
+              onClick={logout}
+              className="rounded-xl border px-4 py-2 text-sm"
+            >
+              Logout
+            </button>
+          </div>
         </header>
 
         <div className="grid gap-6 xl:grid-cols-[260px_1fr]">
