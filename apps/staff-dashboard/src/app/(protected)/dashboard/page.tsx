@@ -1,6 +1,53 @@
+"use client";
+
 import Link from "next/link";
+import { useAuth } from "@/providers/auth-provider";
+import { canAccessNavKey } from "@/lib/access";
+
+const cards = [
+  {
+    href: "/tables",
+    title: "Tables",
+    description: "View tables and manage sessions.",
+    key: "tables" as const,
+  },
+  {
+    href: "/orders",
+    title: "Orders",
+    description: "Create and manage orders.",
+    key: "orders" as const,
+  },
+  {
+    href: "/service-requests",
+    title: "Service Requests",
+    description: "Manage table-side requests.",
+    key: "serviceRequests" as const,
+  },
+  {
+    href: "/billing",
+    title: "Billing",
+    description: "Generate bills and record payments.",
+    key: "billing" as const,
+  },
+  {
+    href: "/notifications",
+    title: "Notifications",
+    description: "View alerts and live workflow events.",
+    key: "notifications" as const,
+  },
+  {
+    href: "/kitchen",
+    title: "Kitchen",
+    description: "Manage the kitchen queue.",
+    key: "kitchen" as const,
+  },
+];
 
 export default function DashboardPage() {
+  const { user } = useAuth();
+
+  const visibleCards = cards.filter((card) => canAccessNavKey(user, card.key));
+
   return (
     <div className="space-y-6">
       <div className="rounded-2xl bg-white p-6 shadow">
@@ -11,53 +58,16 @@ export default function DashboardPage() {
       </div>
 
       <div className="grid gap-4 md:grid-cols-3 xl:grid-cols-6">
-        <Link href="/tables" className="rounded-2xl bg-white p-5 shadow block">
-          <h2 className="font-semibold">Tables</h2>
-          <p className="mt-2 text-sm text-gray-600">
-            View tables and manage sessions.
-          </p>
-        </Link>
-
-        <Link href="/orders" className="rounded-2xl bg-white p-5 shadow block">
-          <h2 className="font-semibold">Orders</h2>
-          <p className="mt-2 text-sm text-gray-600">
-            Create and manage orders.
-          </p>
-        </Link>
-
-        <Link
-          href="/service-requests"
-          className="rounded-2xl bg-white p-5 shadow block"
-        >
-          <h2 className="font-semibold">Service Requests</h2>
-          <p className="mt-2 text-sm text-gray-600">
-            Manage table-side requests.
-          </p>
-        </Link>
-
-        <Link href="/billing" className="rounded-2xl bg-white p-5 shadow block">
-          <h2 className="font-semibold">Billing</h2>
-          <p className="mt-2 text-sm text-gray-600">
-            Generate bills and record payments.
-          </p>
-        </Link>
-
-        <Link
-          href="/notifications"
-          className="rounded-2xl bg-white p-5 shadow block"
-        >
-          <h2 className="font-semibold">Notifications</h2>
-          <p className="mt-2 text-sm text-gray-600">
-            View alerts and live workflow events.
-          </p>
-        </Link>
-
-        <Link href="/kitchen" className="rounded-2xl bg-white p-5 shadow block">
-          <h2 className="font-semibold">Kitchen</h2>
-          <p className="mt-2 text-sm text-gray-600">
-            Manage the kitchen queue.
-          </p>
-        </Link>
+        {visibleCards.map((card) => (
+          <Link
+            key={card.href}
+            href={card.href}
+            className="rounded-2xl bg-white p-5 shadow block"
+          >
+            <h2 className="font-semibold">{card.title}</h2>
+            <p className="mt-2 text-sm text-gray-600">{card.description}</p>
+          </Link>
+        ))}
       </div>
     </div>
   );

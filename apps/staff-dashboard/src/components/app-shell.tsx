@@ -26,6 +26,9 @@ export function AppShell({ children }: { children: React.ReactNode }) {
             <div className="text-sm text-gray-500">
               {user?.email} • {user?.roles.join(", ")}
             </div>
+            <div className="text-xs text-gray-500">
+              Roles: {user?.roles.join(", ")}
+            </div>
           </div>
 
           <div className="flex items-center gap-3">
