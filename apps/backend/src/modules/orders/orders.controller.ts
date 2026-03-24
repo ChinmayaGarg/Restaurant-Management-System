@@ -53,7 +53,7 @@ export class OrdersController {
     @Param("id") id: string,
     @Body() dto: AddOrderItemsDto,
   ) {
-    return this.ordersService.addItems(user.branchId, id, dto);
+    return this.ordersService.addItems(user.branchId, id, user.id, dto);
   }
 
   @Patch(":id/status")

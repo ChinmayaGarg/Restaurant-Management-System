@@ -13,38 +13,85 @@ import { OpenTableSessionDto } from "./dto/open-table-session.dto";
 export class TablesService {
   constructor(private readonly prisma: PrismaService) {}
 
-  async findAll(branchId: string) {
-    return this.prisma.diningTable.findMany({
-      where: { branchId },
-      orderBy: [{ section: { displayOrder: "asc" } }, { displayName: "asc" }],
-      include: {
-        section: true,
-        sessions: {
-          where: { status: TableSessionStatus.OPEN },
-          orderBy: { openedAt: "desc" },
-          take: 1,
-          include: {
-            openedByUser: {
-              select: {
-                id: true,
-                firstName: true,
-                lastName: true,
-                email: true,
-              },
+  private getTableInclude() {
+    return Prisma.validator<Prisma.DiningTableInclude>()({
+      section: true,
+      sessions: {
+        where: { status: TableSessionStatus.OPEN },
+        orderBy: { openedAt: "desc" as const },
+        take: 1,
+        include: {
+          openedByUser: {
+            select: {
+              id: true,
+              firstName: true,
+              lastName: true,
+              email: true,
             },
-            assignedServer: {
-              select: {
-                id: true,
-                firstName: true,
-                lastName: true,
-                email: true,
-              },
+          },
+          assignedServer: {
+            select: {
+              id: true,
+              firstName: true,
+              lastName: true,
+              email: true,
+            },
+          },
+          seatAssignments: {
+            where: {
+              isActive: true,
+            },
+            orderBy: {
+              seatNumber: "asc" as const,
             },
           },
         },
       },
     });
   }
+
+  async findAll(branchId: string) {
+    return this.prisma.diningTable.findMany({
+      where: { branchId },
+      orderBy: [
+        { section: { displayOrder: "asc" as const } },
+        { displayName: "asc" as const },
+      ],
+      include: this.getTableInclude(),
+    });
+  }
+  // async findA ll(branchId: string) {
+  // return this.prisma.diningTable.findMany({
+  //   where: { branchId },
+  //   orderBy: [{ section: { displayOrder: "asc" } }, { displayName: "asc" }],
+  //   include: {
+  //     section: true,
+  //     sessions: {
+  //       where: { status: TableSessionStatus.OPEN },
+  //       orderBy: { openedAt: "desc" },
+  //       take: 1,
+  //       include: {
+  //         openedByUser: {
+  //           select: {
+  //             id: true,
+  //             firstName: true,
+  //             lastName: true,
+  //             email: true,
+  //           },
+  //         },
+  //         assignedServer: {
+  //           select: {
+  //             id: true,
+  //             firstName: true,
+  //             lastName: true,
+  //             email: true,
+  //           },
+  //         },
+  //       },
+  //     },
+  //   },
+  // });
+  // }
 
   async updateStatus(
     branchId: string,
@@ -93,8 +140,8 @@ export class TablesService {
 
   async openSession(
     branchId: string,
-    tableId: string,
     openedByUserId: string,
+    tableId: string,
     dto: OpenTableSessionDto,
   ) {
     const table = await this.prisma.diningTable.findFirst({
@@ -104,7 +151,9 @@ export class TablesService {
       },
       include: {
         sessions: {
-          where: { status: TableSessionStatus.OPEN },
+          where: {
+            status: TableSessionStatus.OPEN,
+          },
           take: 1,
         },
       },
@@ -114,14 +163,8 @@ export class TablesService {
       throw new NotFoundException("Table not found for this branch");
     }
 
-    if (table.status === TableStatus.OUT_OF_SERVICE) {
-      throw new BadRequestException(
-        "Cannot open a session on an out-of-service table",
-      );
-    }
-
     if (table.sessions.length > 0) {
-      throw new ConflictException("This table already has an open session");
+      throw new BadRequestException("This table already has an open session");
     }
 
     if (dto.assignedServerId) {
@@ -140,15 +183,51 @@ export class TablesService {
       }
     }
 
+    const totalSeats = dto.guestCount ?? table.capacity;
+
+    if (totalSeats < 1) {
+      throw new BadRequestException("Seat count must be at least 1");
+    }
+
     return this.prisma.$transaction(async (tx: Prisma.TransactionClient) => {
-      const session = await tx.tableSession.create({
+      const tableSession = await tx.tableSession.create({
         data: {
           tableId,
-          openedByUserId,
-          assignedServerId: dto.assignedServerId,
-          guestCount: dto.guestCount,
           status: TableSessionStatus.OPEN,
+          guestCount: dto.guestCount ?? null,
+          openedByUserId,
+          assignedServerId: dto.assignedServerId ?? null,
+          assignedByUserId: dto.assignedServerId ? openedByUserId : null,
+          assignedAt: dto.assignedServerId ? new Date() : null,
         },
+      });
+
+      await tx.seatAssignment.createMany({
+        data: this.buildSeatAssignments(tableSession.id, totalSeats),
+      });
+
+      if (dto.assignedServerId) {
+        await tx.tableSessionAssignmentHistory.create({
+          data: {
+            tableSessionId: tableSession.id,
+            fromUserId: null,
+            toUserId: dto.assignedServerId,
+            changedByUserId: openedByUserId,
+            reason: "Initial table assignment",
+            startedAt: new Date(),
+          },
+        });
+      }
+
+      await tx.diningTable.update({
+        where: { id: tableId },
+        data: {
+          status: TableStatus.OCCUPIED,
+        },
+      });
+
+      return tx.tableSession.findUniqueOrThrow({
+        where: { id: tableSession.id },
         include: {
           table: {
             include: {
@@ -171,18 +250,47 @@ export class TablesService {
               email: true,
             },
           },
+          seatAssignments: {
+            where: {
+              isActive: true,
+            },
+            orderBy: {
+              seatNumber: "asc",
+            },
+          },
         },
       });
-
-      await tx.diningTable.update({
-        where: { id: tableId },
-        data: {
-          status: TableStatus.OCCUPIED,
-        },
-      });
-
-      return session;
     });
+  }
+
+  private buildSeatAssignments(tableSessionId: string, totalSeats: number) {
+    const seats: Array<{
+      tableSessionId: string;
+      seatNumber: number;
+      label: string;
+      isShared: boolean;
+      isActive: boolean;
+    }> = [];
+
+    for (let seat = 1; seat <= totalSeats; seat++) {
+      seats.push({
+        tableSessionId,
+        seatNumber: seat,
+        label: `Seat ${seat}`,
+        isShared: false,
+        isActive: true,
+      });
+    }
+
+    seats.push({
+      tableSessionId,
+      seatNumber: 0,
+      label: "Shared",
+      isShared: true,
+      isActive: true,
+    });
+
+    return seats;
   }
 
   async closeSession(branchId: string, tableId: string) {

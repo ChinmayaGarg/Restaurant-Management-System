@@ -1,5 +1,5 @@
-import { OrderSourceType } from "@prisma/client";
 import {
+  ArrayMinSize,
   IsArray,
   IsEnum,
   IsOptional,
@@ -7,6 +7,7 @@ import {
   ValidateNested,
 } from "class-validator";
 import { Type } from "class-transformer";
+import { OrderSourceType } from "@prisma/client";
 import { CreateOrderItemDto } from "./create-order-item.dto";
 
 export class CreateOrderDto {
@@ -21,6 +22,7 @@ export class CreateOrderDto {
   notes?: string;
 
   @IsArray()
+  @ArrayMinSize(1)
   @ValidateNested({ each: true })
   @Type(() => CreateOrderItemDto)
   items!: CreateOrderItemDto[];

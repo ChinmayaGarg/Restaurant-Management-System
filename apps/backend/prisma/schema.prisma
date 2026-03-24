@@ -366,7 +366,7 @@ model TableSession {
 model SeatAssignment {
   id             String       @id @default(cuid())
   tableSessionId String
-  seatNumber     Int?
+  seatNumber     Int
   label          String
   isShared       Boolean      @default(false)
   isActive       Boolean      @default(true)
@@ -377,7 +377,6 @@ model SeatAssignment {
   orderItems     OrderItem[]
 
   @@index([tableSessionId])
-  @@unique([tableSessionId, seatNumber])
 }
 
 model TableSessionAssignmentHistory {
@@ -506,9 +505,9 @@ model OrderItem {
   lineTotal          Decimal         @db.Decimal(10, 2)
   specialInstructions String?
   status             OrderItemStatus @default(PENDING)
-  courseType         CourseType      @default(ENTREE)
+  courseType         CourseType      @default(APPETIZER)
   courseRound        Int             @default(1)
-  fireStatus         FireStatus      @default(FIRED)
+  fireStatus         FireStatus      @default(HOLD)
   addedByUserId      String?
   createdAt          DateTime        @default(now())
   updatedAt          DateTime        @updatedAt
@@ -639,6 +638,10 @@ model BillItem {
   quantity        Int
   unitPrice       Decimal   @db.Decimal(10, 2)
   lineTotal       Decimal   @db.Decimal(10, 2)
+  seatAssignmentId  String?
+  seatNumberSnapshot Int?
+  seatLabelSnapshot  String?
+  courseTypeSnapshot CourseType?
 
   bill            Bill      @relation(fields: [billId], references: [id], onDelete: Cascade)
   orderItem       OrderItem? @relation(fields: [orderItemId], references: [id], onDelete: SetNull)

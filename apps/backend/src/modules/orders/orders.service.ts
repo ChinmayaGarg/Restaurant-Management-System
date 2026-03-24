@@ -3,7 +3,14 @@ import {
   Injectable,
   NotFoundException,
 } from "@nestjs/common";
-import { OrderStatus, Prisma, TableSessionStatus } from "@prisma/client";
+import {
+  CourseType,
+  FireStatus,
+  OrderItemStatus,
+  OrderStatus,
+  Prisma,
+  TableSessionStatus,
+} from "@prisma/client";
 import { PrismaService } from "../../database/prisma.service";
 import { CreateOrderDto } from "./dto/create-order.dto";
 import { AddOrderItemsDto } from "./dto/add-order-items.dto";
@@ -73,6 +80,11 @@ export class OrdersService {
             section: true,
           },
         },
+        seatAssignments: {
+          where: {
+            isActive: true,
+          },
+        },
       },
     });
 
@@ -88,7 +100,7 @@ export class OrdersService {
           tableSessionId: dto.tableSessionId,
           sourceType: dto.sourceType,
           createdByUserId,
-          notes: dto.notes,
+          notes: dto.notes ?? null,
           status: OrderStatus.PLACED,
           subtotalAmount: new Prisma.Decimal(0),
         },
@@ -103,7 +115,13 @@ export class OrdersService {
         },
       });
 
-      const subtotal = await this.createOrderItems(tx, order.id, dto.items);
+      const subtotal = await this.createOrderItems(
+        tx,
+        tableSession.id,
+        order.id,
+        createdByUserId,
+        dto.items,
+      );
 
       await tx.order.update({
         where: { id: order.id },
@@ -119,7 +137,12 @@ export class OrdersService {
     });
   }
 
-  async addItems(branchId: string, orderId: string, dto: AddOrderItemsDto) {
+  async addItems(
+    branchId: string,
+    orderId: string,
+    addedByUserId: string,
+    dto: AddOrderItemsDto,
+  ) {
     if (!dto.items?.length) {
       throw new BadRequestException("At least one item is required");
     }
@@ -133,6 +156,9 @@ export class OrdersService {
             branchId,
           },
         },
+      },
+      include: {
+        tableSession: true,
       },
     });
 
@@ -150,7 +176,13 @@ export class OrdersService {
     }
 
     return this.prisma.$transaction(async (tx: Prisma.TransactionClient) => {
-      const addedSubtotal = await this.createOrderItems(tx, orderId, dto.items);
+      const addedSubtotal = await this.createOrderItems(
+        tx,
+        order.tableSessionId,
+        orderId,
+        addedByUserId,
+        dto.items,
+      );
 
       await tx.order.update({
         where: { id: orderId },
@@ -217,12 +249,29 @@ export class OrdersService {
 
   private async createOrderItems(
     tx: Prisma.TransactionClient,
+    tableSessionId: string,
     orderId: string,
+    addedByUserId: string,
     items: CreateOrderItemDto[],
   ): Promise<Prisma.Decimal> {
     let subtotal = new Prisma.Decimal(0);
 
+    const seatAssignments = await tx.seatAssignment.findMany({
+      where: {
+        tableSessionId,
+        isActive: true,
+      },
+    });
+
+    const validSeatIds = new Set(seatAssignments.map((seat) => seat.id));
+
     for (const item of items) {
+      if (!validSeatIds.has(item.seatAssignmentId)) {
+        throw new BadRequestException(
+          `Seat assignment ${item.seatAssignmentId} is invalid for this table session`,
+        );
+      }
+
       const menuItem = await tx.menuItem.findUnique({
         where: { id: item.menuItemId },
       });
@@ -265,10 +314,16 @@ export class OrdersService {
         data: {
           orderId,
           menuItemId: item.menuItemId,
+          seatAssignmentId: item.seatAssignmentId,
           quantity: item.quantity,
           unitPrice,
           lineTotal,
-          specialInstructions: item.specialInstructions,
+          specialInstructions: item.specialInstructions ?? null,
+          status: OrderItemStatus.PENDING,
+          courseType: item.courseType,
+          courseRound: item.courseRound ?? 1,
+          fireStatus: this.getDefaultFireStatus(item.courseType),
+          addedByUserId,
         },
       });
 
@@ -288,6 +343,20 @@ export class OrdersService {
     return subtotal;
   }
 
+  private getDefaultFireStatus(courseType: CourseType): FireStatus {
+    switch (courseType) {
+      case CourseType.ENTREE:
+        return FireStatus.HOLD;
+      case CourseType.APPETIZER:
+      case CourseType.DRINK:
+      case CourseType.DESSERT:
+      case CourseType.SIDE:
+      case CourseType.OTHER:
+      default:
+        return FireStatus.FIRED;
+    }
+  }
+
   private getOrderInclude() {
     return {
       tableSession: {
@@ -295,6 +364,22 @@ export class OrdersService {
           table: {
             include: {
               section: true,
+            },
+          },
+          assignedServer: {
+            select: {
+              id: true,
+              firstName: true,
+              lastName: true,
+              email: true,
+            },
+          },
+          seatAssignments: {
+            where: {
+              isActive: true,
+            },
+            orderBy: {
+              seatNumber: "asc" as const,
             },
           },
         },
@@ -310,6 +395,15 @@ export class OrdersService {
       items: {
         include: {
           menuItem: true,
+          seatAssignment: true,
+          addedByUser: {
+            select: {
+              id: true,
+              firstName: true,
+              lastName: true,
+              email: true,
+            },
+          },
           modifiers: {
             include: {
               modifierOption: true,
