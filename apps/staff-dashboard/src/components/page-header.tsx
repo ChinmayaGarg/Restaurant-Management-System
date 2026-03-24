@@ -1,4 +1,6 @@
 import Link from "next/link";
+import { Card } from "@/components/ui/card";
+import { Button } from "@/components/ui/button";
 
 type PageHeaderProps = {
   title: string;
@@ -16,7 +18,7 @@ export function PageHeader({
   action,
 }: PageHeaderProps) {
   return (
-    <div className="flex items-center justify-between rounded-2xl bg-white p-6 shadow">
+    <Card className="flex items-center justify-between">
       <div>
         <h1 className="text-2xl font-semibold">{title}</h1>
         <p className="mt-1 text-sm text-gray-600">{description}</p>
@@ -24,10 +26,10 @@ export function PageHeader({
 
       <div className="flex items-center gap-3">
         {action}
-        <Link href={backHref} className="rounded-xl border px-4 py-2">
-          {backLabel}
+        <Link href={backHref}>
+          <Button variant="outline">{backLabel}</Button>
         </Link>
       </div>
-    </div>
+    </Card>
   );
 }

@@ -16,6 +16,11 @@ import type {
   NotificationItem,
   NotificationReadEvent,
 } from "@/types/notifications";
+import { Card, CardContent, CardHeader } from "@/components/ui/card";
+import { Button } from "@/components/ui/button";
+import { StatusBadge } from "@/components/ui/status-badge";
+import { EmptyState } from "@/components/ui/empty-state";
+import { PageHeader } from "@/components/page-header";
 
 function getTypeBadgeClasses(type: string) {
   switch (type) {
@@ -159,15 +164,10 @@ export default function NotificationsPage() {
     <main className="min-h-screen bg-gray-100 p-6">
       <div className="mx-auto max-w-5xl space-y-6">
         <div className="flex items-center justify-between rounded-2xl bg-white p-6 shadow">
-          <div>
-            <h1 className="text-2xl font-semibold">Notifications</h1>
-            <p className="mt-1 text-sm text-gray-600">
-              Live restaurant alerts and workflow events.
-            </p>
-            <p className="mt-2 text-sm font-medium text-gray-700">
-              Unread: {unreadCount}
-            </p>
-          </div>
+          <PageHeader
+            title="Notifications"
+            description="Live restaurant alerts and workflow events."
+          />
 
           <Link href="/dashboard" className="rounded-xl border px-4 py-2">
             Back to dashboard
@@ -196,27 +196,34 @@ export default function NotificationsPage() {
 
         <div className="space-y-4">
           {notifications.map((notification) => (
-            <div
+            <Card
               key={notification.id}
-              className={`rounded-2xl bg-white p-5 shadow ${
-                notification.isRead ? "opacity-80" : ""
-              }`}
+              className={notification.isRead ? "opacity-80" : ""}
             >
               <div className="flex flex-col gap-3 md:flex-row md:items-start md:justify-between">
                 <div className="space-y-2">
                   <div className="flex items-center gap-3">
                     <h2 className="font-semibold">{notification.title}</h2>
-                    <span
-                      className={`rounded-full px-3 py-1 text-xs font-medium ${getTypeBadgeClasses(
-                        notification.type,
-                      )}`}
-                    >
-                      {notification.type}
-                    </span>
+                    <StatusBadge
+                      label={notification.type}
+                      tone={
+                        notification.type === "SERVICE_REQUEST_CREATED"
+                          ? "blue"
+                          : notification.type === "SERVICE_REQUEST_ESCALATED"
+                            ? "red"
+                            : notification.type === "ORDER_READY"
+                              ? "green"
+                              : notification.type === "BILL_GENERATED"
+                                ? "purple"
+                                : notification.type === "PAYMENT_RECORDED"
+                                  ? "emerald"
+                                  : notification.type === "BILL_PAID"
+                                    ? "green"
+                                    : "gray"
+                      }
+                    />
                     {!notification.isRead ? (
-                      <span className="rounded-full bg-black px-2 py-1 text-xs text-white">
-                        Unread
-                      </span>
+                      <StatusBadge label="Unread" tone="gray" />
                     ) : null}
                   </div>
 
@@ -237,22 +244,23 @@ export default function NotificationsPage() {
 
                 {!notification.isRead &&
                 canDoAction(user, "notifications.markRead") ? (
-                  <button
+                  <Button
+                    variant="outline"
                     onClick={() => markReadMutation.mutate(notification.id)}
                     disabled={markReadMutation.isPending}
-                    className="rounded-xl border px-4 py-2"
                   >
                     {markReadMutation.isPending ? "Saving..." : "Mark as read"}
-                  </button>
+                  </Button>
                 ) : null}
               </div>
-            </div>
+            </Card>
           ))}
 
           {!notificationsQuery.isLoading && notifications.length === 0 ? (
-            <div className="rounded-2xl bg-white p-6 shadow text-sm text-gray-600">
-              No notifications yet.
-            </div>
+            <EmptyState
+              title="No notifications yet"
+              description="New alerts and workflow events will appear here."
+            />
           ) : null}
         </div>
       </div>

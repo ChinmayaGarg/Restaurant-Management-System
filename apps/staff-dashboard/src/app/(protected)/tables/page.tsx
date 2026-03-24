@@ -22,7 +22,7 @@ const TABLE_STATUSES: TableStatus[] = [
   "CLEANING",
   "OUT_OF_SERVICE",
 ];
-
+import { StatusBadge } from "@/components/ui/status-badge";
 import { useToast } from "@/providers/toast-provider";
 import { ConfirmDialog } from "@/components/confirm-dialog";
 import { PageHeader } from "@/components/page-header";
@@ -221,13 +221,22 @@ export default function TablesPage() {
                         </div>
                       </div>
 
-                      <span
-                        className={`rounded-full px-3 py-1 text-xs font-medium ${getStatusClasses(
-                          table.status,
-                        )}`}
-                      >
-                        {table.status}
-                      </span>
+                      <StatusBadge
+                        label={table.status}
+                        tone={
+                          table.status === "AVAILABLE"
+                            ? "green"
+                            : table.status === "OCCUPIED"
+                              ? "blue"
+                              : table.status === "RESERVED"
+                                ? "yellow"
+                                : table.status === "CLEANING"
+                                  ? "orange"
+                                  : table.status === "OUT_OF_SERVICE"
+                                    ? "red"
+                                    : "gray"
+                        }
+                      />
                     </div>
 
                     <div className="mt-4">

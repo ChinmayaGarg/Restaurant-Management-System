@@ -6,7 +6,7 @@ import { useRouter } from "next/navigation";
 import { useMemo, useState } from "react";
 import { useAuth } from "@/providers/auth-provider";
 import { canDoAction } from "@/lib/access";
-
+import { Button } from "@/components/ui/button";
 import { closeBill, generateBill, getBill } from "@/lib/billing-api";
 import {
   getPaymentSummary,
@@ -347,13 +347,13 @@ export default function BillingPage() {
                 </div>
 
                 {bill && canDoAction(user, "billing.close") ? (
-                  <button
+                  <Button
                     onClick={() => setConfirmCloseOpen(true)}
                     disabled={closeBillMutation.isPending}
-                    className="rounded-xl border px-4 py-2"
+                    variant="outline"
                   >
                     Close bill
-                  </button>
+                  </Button>
                 ) : null}
               </div>
 
